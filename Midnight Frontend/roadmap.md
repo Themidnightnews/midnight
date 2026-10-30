@@ -1,0 +1,125 @@
+# Category access (Oct 30)
+- [x] Include every category in More categories and the small-screen hamburger menu, including scrolling-header categories.
+
+# Trends pill + categories (Oct 29, 09:44)
+- [x] Trends hashtag pill: premium glassy brand gradient.
+- [x] Hashtag list opens on hover.
+- [x] Add 36 standard news categories (space, astronomy, agriculture, AI, energy...).
+
+# Security + speed (Oct 28, 09:22)
+- [x] Bot/abuse limits: gentle for normal readers, strict only on anomalies.
+- [x] Layered protection against flooding and common attacks (headers, input limits, admin lockout).
+- [x] Data caching and page-speed optimizations.
+- [ ] Clarify "DMS" with user.
+
+# SEO + domain (Oct 28, 09:07)
+- [x] Site address themidnightnews.com used for canonical, og:url, sitemap, robots.
+- [x] sitemap.xml with all pages, sections and articles.
+- [x] Structured data, share tags, article interlinking.
+- [x] Emails use @themidnightnews.com everywhere.
+- [ ] Google Analytics: waiting on GA4 Measurement ID from user.
+- [x] Confirm earlier requests (hero animation, stars, admin/user activity, batched admin loading) are done.
+
+# Admin follow-ups (Oct 28, 08:39)
+- [x] Team tab shows team activity again (as before).
+- [x] Readers: sort/filter by most comments, likes, replies, saves, etc.
+- [x] Overview chart lines back to black (no pink gradient fill).
+- [x] Remove "Staff only" text on admin sign-in/up form.
+- [x] Analytics page shows every total (saves, likes, comments, replies, readers…).
+- [x] Admin comment cards match article cards (photo + gradient).
+- [x] Phone layout: rearrange admin article/comment/message cards cleanly.
+- [x] Admin header gradient no longer covers the top (logo, titles).
+- [x] Main site: replace old round spinner with the modern loader.
+
+# Admin requests (Oct 28, 07:56)
+- [x] Team tab lists team members; empty card "No team members yet. Add new ones."
+- [x] Rename "Members" → "Readers" (Midnight users), listing app users from MongoDB.
+- [x] Bulk actions (select many) on lists.
+- [x] Centered confirmation pop-up before destructive/saving actions; two-step confirm for the most serious.
+
+# Admin redesign requests (Oct 28, 07:42)
+- [x] Own premium dropdown for the time filter + exact "last N days" entry.
+- [x] Left menu fixed (scrolls inside), collapses with screen size; hamburger drawer on phones.
+- [x] Whole admin responsive at every width: no overflow, no cramped text or cards.
+- [x] Search + filters (time, section, status, type…) on Articles, Comments, Members, Activity log, Team.
+- [x] Members lists the readers stored in MongoDB.
+- [x] One clean animated brand loader used for every loading state (admin + site).
+- [x] Switch toggles clearly visible when off.
+- [x] All inputs/search/textareas visibly styled; brand focus ring, never black.
+- [x] Admin cards, buttons, hovers, story rows match the site's premium look (photo + glow cards).
+
+# Move into new Lovable project (Oct 28, 07:32)
+- [x] Copy code, recreate tables, email sign-in, reconnect MongoDB, default admin.
+- [ ] Import existing users and relink their comments/likes/saves (waits on user export).
+- [ ] Import old page views / audit log (waits on export or skip).
+
+# Migration into this project (Oct 27, 13:08)
+- [x] Copy site code, apply sign-up schema, enable email + Google sign-in.
+- [x] Replace missing Midnight Report image.
+- [x] Connect MongoDB (stories and comments load).
+- [ ] Import existing user accounts (waits on user export).
+
+# Requests (Oct 27, 13:44)
+- [x] Phone header: halve the gap between search and menu button.
+- [x] Jump arrow: premium site-style colours (not blue/purple, not black).
+- [x] Discussion: more space below "Sign in to join the discussion" (scales with screen).
+- [x] Discussion card max height = 3/4 of current.
+- [x] Scrolling inside the discussion continues to the page at its ends (both directions).
+- [x] Write one short sample Midnight Report into MongoDB (only if the connection is allowed); report page shows latest by default; nothing hard-coded.
+
+# Requests (Oct 27, 13:14)
+- [x] Phone-width compact header: signed in → profile icon + Report; signed out → Report only (no Sign in).
+- [x] Profile Saved and Liked tabs use the same card design as the Comments tab.
+- [x] Missing images show one of ~20 fixed gradients (picked per image), never alt/placeholder text.
+- [x] Premium custom scrollbars (page, discussion, any scroll area) in brand colours.
+- [x] Whole site responsive at every width: no sideways overflow, nothing cramped or broken.
+- [x] Remove social sign-in (Google, Lovable); email + password only.
+- [x] Removed forgot password and confirmation emails (user's choice); sign-up is instant, max 3 accounts per network per day.
+- [x] Make sure user information stored in MongoDB is encrypted.
+- [x] Article Like/Save/Share/Discuss: one line always; drop text labels (icons only) when they don't fit.
+- [x] Article page: floating arrow at bottom centre; points down near the top (jumps to the start of the discussion), points up at the discussion (jumps back to top).
+
+# Current requests (Oct 27, after migration)
+- [x] Connect MongoDB (MONGODB_URI, COMMUNITY_ENCRYPTION_KEY) and rerun all tests incl. Technology link + wind search checks.
+- [x] Clean loading skeletons + empty/error cards everywhere; on failure keep layout with empty cards or show one message, no stray hardcoded titles.
+- [x] Fastest possible loading (caching, preloading, lighter pages).
+- [x] Like/save: only icon fills; instant updates + smooth animations on like, save, share, discuss, comment.
+- [x] Discussion in one card scrolling inside itself.
+- [x] Verify sign-in screen changes.
+- [x] Verify home page shows article links.
+- [x] Midnight Report image kept as local file in src/assets.
+
+# Blocked earlier
+- [x] Real publication dates, readership and share counts (not in data).
+
+# Requests (Oct 27, 12:41)
+- [x] Wider gap between profile icon and Report button on large screens.
+- [x] Each comment/reply in its own visible card (distinct from background).
+- [x] Remove "N replies" line; the Reply button shows count and toggles reply input + replies; reply textarea half height.
+- [x] Profile comments tab: cards with article image on left + live effect, like article cards.
+- [x] Explore categories: cards with small matching image on left + live effect.
+- [x] Section pages: infinite scroll; load only important content first.
+
+# Blocked
+- [x] Comments load with the newly saved key.
+- [x] Some stories in MongoDB point at photos (asset:news-tech.jpg, asset:news-science.jpg) that were not in the upload.
+
+# Requests (Oct 27, 12:54)
+- [x] Comment/reply cards use the site's frosted-glass style, not grey.
+- [x] Reply box clears and closes after posting.
+- [x] Discussion: no fixed height, grows with content up to double the old maximum.
+- [x] More space between profile icon and Report button from medium screens up.
+
+# Requests (Oct 28, 06:44)
+- [x] Google Analytics (GA4 via @next/third-parties-style gtag; Vercel-compatible env var), no ID yet.
+- [x] Admin dashboard at /admin: own visit stats + GA, per-article views, edit/pause articles, site pause, security, sessions, audit log.
+- [x] Default admin login admin / admin@admin.com / admin (user's explicit choice), changeable; admins can add editors.
+
+# Requests (Oct 28, 06:59)
+- [x] Midnight Report image: dark gradient when no image, never crash.
+
+# Trends finish-up (Oct 29, 07:02)
+- [x] Trends page shows trends on first load.
+- [x] Each trend opens its own page.
+- [x] Checked hashtag dropdown and sort buttons.
+- [x] Removed the 3 sample trends and the sample Midnight Report (Oct 27).
