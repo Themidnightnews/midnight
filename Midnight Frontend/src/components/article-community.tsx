@@ -172,8 +172,7 @@ export function Discussion({ slug }: { slug: string }) {
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: discussionKey(slug) });
       const prev = qc.getQueryData<DiscussionState>(discussionKey(slug));
-      const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
-      const name = String(meta["username"] ?? meta["full_name"] ?? user?.email?.split("@")[0] ?? "you");
+      const name = user?.username || user?.email?.split("@")[0] || "you";
       const temp: CommentDTO = { id: `temp-${Date.now()}`, parentId: v.parentId, text: v.text, createdAt: new Date().toISOString(), editedAt: null, deleted: false, likes: 0, author: { username: name, displayName: name, hue: 280 } };
       if (prev) qc.setQueryData<DiscussionState>(discussionKey(slug), { comments: [...prev.comments, temp], counts: { ...prev.counts, comments: prev.counts.comments + 1 } });
       return { prev };

@@ -4,12 +4,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { Loader, LoaderBlock } from "@/components/loader";
 
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { PasswordField } from "@/components/password-field";
 import { useAuth } from "@/hooks/use-auth";
 import { checkUsername } from "@/lib/community.functions";
-import { instantSignUp, explainSignInFailure } from "@/lib/signup.functions";
+import { instantSignUp, signIn } from "@/lib/signup.functions";
 import { LIMITS, emailSchema, passwordError, usernameSchema, type FormErrors, fieldError } from "@/lib/community-rules";
 
 const search = z.object({ redirect: z.string().optional(), mode: z.enum(["signin", "signup"]).optional() });
@@ -46,7 +45,7 @@ function friendly(message: string) {
 function AuthPage() {
   const { redirect, mode: initial } = Route.useSearch();
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">(initial ?? "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -94,21 +93,13 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (error) {
-          if (!error.message.toLowerCase().includes("invalid login")) throw error;
-          const status = await explainSignInFailure({ data: { email: email.trim() } }).catch(() => "unknown" as const);
-          throw new Error(
-            status === "no_account" ? "There's no account with this email. Check the spelling or create an account."
-            : status === "social_only" ? "This account was set up without a password, so it can't sign in here. Please contact us for help."
-            : status === "has_password" ? "Incorrect password for this email. Check it and try again."
-            : "That email and password don't match. Check both and try again.");
-        }
+        const res = await signIn({ data: { email: email.trim(), password } });
+        if (!res.ok) throw new Error(res.error);
+        await refresh();
       } else if (mode === "signup") {
         const res = await instantSignUp({ data: { email: email.trim(), password, username: username.trim() } });
         if (res.status === "created") {
-          const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-          if (error) throw error;
+          await refresh();
         } else {
           throw new Error(`Only ${res.limit} new accounts can be created from one network per day. Please try again tomorrow.`);
         }

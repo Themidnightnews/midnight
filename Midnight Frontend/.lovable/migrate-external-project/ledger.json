@@ -8,7 +8,7 @@
  },
  {
   "capability": "schema + SQL functions + default admin",
-  "source": "drizzle migration",
+  "source": "archive drizzle migration (applied to new Lovable Cloud)",
   "outcome": "migrate",
   "status": "done",
   "next_action": "change default admin password (admin/admin)"
@@ -39,7 +39,7 @@
   "source": "MongoDB",
   "outcome": "preserve",
   "status": "verified",
-  "next_action": "home page loads 71 story links from MongoDB"
+  "next_action": "home page loads 40 story links in this project"
  },
  {
   "capability": "Google Analytics",

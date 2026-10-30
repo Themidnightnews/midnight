@@ -24,7 +24,7 @@ export function AccountButton({ compact = false, onNavigate }: { compact?: boole
       </Button>
     );
   }
-  const name = (user.user_metadata?.["username"] as string | undefined) ?? user.email ?? "Reader";
+  const name = user.username || user.email || "Reader";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label="Your account" className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">

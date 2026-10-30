@@ -1,5 +1,4 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { LIMITS, bioSchema, commentTextSchema, displayNameSchema, usernameSchema, canEditComment } from "./community-rules";
 
@@ -16,6 +15,12 @@ export type ProfileDTO = {
 };
 
 const server = () => import("./community.server");
+/** Signed-in reader from the MongoDB session cookie; refuses the call otherwise. */
+const requireReader = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  const { requireUser } = await import("./auth.server");
+  const u = await requireUser();
+  return next({ context: { userId: u.id, claims: { email: u.email, user_metadata: { username: u.username } } as Record<string, unknown> } });
+});
 const clearCacheMw = createMiddleware({ type: "function" }).server(async ({ next }) => { const r = await next(); discussionCache.clear(); return r; });
 const hueFor = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
@@ -94,7 +99,7 @@ async function loadDiscussion(slug: string) {
 
 /** Signed-in reader's own state on one article. */
 export const getMyArticleState = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => slugInput.parse(i))
   .handler(async ({ data, context }) => {
     const { withDb } = await server();
@@ -114,7 +119,7 @@ export const getMyArticleState = createServerFn({ method: "GET" })
   });
 
 export const toggleInteraction = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => slugInput.extend({ kind: z.enum(["like", "save"]) }).parse(i))
   .handler(async ({ data, context }) => {
     const { withDb } = await server();
@@ -131,7 +136,7 @@ export const toggleInteraction = createServerFn({ method: "POST" }).middleware([
   });
 
 export const toggleCommentLike = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => z.object({ commentId: idSchema }).parse(i))
   .handler(async ({ data, context }) => {
     const { withDb } = await server();
@@ -161,7 +166,7 @@ export const recordShare = createServerFn({ method: "POST" }).middleware([clearC
   });
 
 export const addComment = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => slugInput.extend({ text: commentTextSchema, parentId: idSchema.nullable() }).parse(i))
   .handler(async ({ data, context }) => {
     await (await import("./admin.server")).assertEnabled("comments_enabled");
@@ -190,7 +195,7 @@ export const addComment = createServerFn({ method: "POST" }).middleware([clearCa
   });
 
 export const editComment = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => z.object({ commentId: idSchema, text: commentTextSchema }).parse(i))
   .handler(async ({ data, context }) => {
     const { withDb, encrypt } = await server();
@@ -206,7 +211,7 @@ export const editComment = createServerFn({ method: "POST" }).middleware([clearC
   });
 
 export const deleteComment = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => z.object({ commentId: idSchema }).parse(i))
   .handler(async ({ data, context }) => {
     const { withDb } = await server();
@@ -223,7 +228,7 @@ export const deleteComment = createServerFn({ method: "POST" }).middleware([clea
   });
 
 export const getMyProfile = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .handler(async ({ context }) => {
     const { withDb, decrypt } = await server();
     return withDb(async (db) => {
@@ -245,7 +250,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
   });
 
 export const getMyLibrary = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .handler(async ({ context }) => {
     const { withDb, decrypt } = await server();
     return withDb(async (db) => {
@@ -262,7 +267,7 @@ export const getMyLibrary = createServerFn({ method: "GET" })
   });
 
 export const updateMyProfile = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .inputValidator((i: unknown) => z.object({ username: usernameSchema, displayName: displayNameSchema, bio: bioSchema }).parse(i))
   .handler(async ({ data, context }) => {
     const { withDb, encrypt } = await server();
@@ -274,6 +279,7 @@ export const updateMyProfile = createServerFn({ method: "POST" }).middleware([cl
           displayNameEnc: data.displayName ? await encrypt(data.displayName) : null,
           bioEnc: data.bio ? await encrypt(data.bio) : null, updatedAt: new Date(),
         } });
+        await db.collection("users").updateOne({ _id: context.userId as never }, { $set: { username: data.username } });
       } catch (e) {
         if ((e as { code?: number }).code === 11000) return { ok: false as const, error: "That username is already taken" };
         throw e;
@@ -291,7 +297,7 @@ export const checkUsername = createServerFn({ method: "GET" })
 
 /** Permanently removes the caller's community data and sign-in account. */
 export const deleteMyAccount = createServerFn({ method: "POST" }).middleware([clearCacheMw])
-  .middleware([requireSupabaseAuth])
+  .middleware([requireReader])
   .handler(async ({ context }) => {
     const { withDb } = await server();
     await withDb(async (db) => {
@@ -303,8 +309,8 @@ export const deleteMyAccount = createServerFn({ method: "POST" }).middleware([cl
         db.collection("communityProfiles").deleteOne({ _id: uid as never }),
       ]);
     });
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(context.userId);
-    if (error) throw new Error("Your data was removed but the account could not be closed. Please try again");
+    const { authDb, users, userSessions, endUserSession } = await import("./auth.server");
+    await authDb(async (db) => { await Promise.all([users(db).deleteOne({ _id: context.userId }), userSessions(db).deleteMany({ userId: context.userId })]); });
+    await endUserSession();
     return { ok: true };
   });

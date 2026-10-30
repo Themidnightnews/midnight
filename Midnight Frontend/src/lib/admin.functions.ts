@@ -18,23 +18,26 @@ export const adminMe = createServerFn({ method: "GET" }).handler(async () => {
 export const adminLogin = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ login: z.string().trim().min(1).max(254), password: z.string().min(1).max(200) }).parse(d))
   .handler(async ({ data }) => {
-    const { adminDb, ipHash, audit, createSession } = await srv();
-    const db = await adminDb();
-    const since = new Date(Date.now() - LOCK_MINUTES * 60_000).toISOString();
-    const { count } = await db.from("admin_audit_log").select("id", { count: "exact", head: true })
-      .eq("action", "login_failed").eq("ip_hash", await ipHash()).gte("created_at", since);
-    if ((count ?? 0) >= MAX_FAILED_LOGINS) {
+    const { adminDb, ipHash, audit, createSession, accounts, auditLog, verifyPassword } = await srv();
+    const since = new Date(Date.now() - LOCK_MINUTES * 60_000);
+    const ip = await ipHash();
+    const login = data.login.toLowerCase();
+    const { count, acc } = await adminDb(async (db) => {
+      const count = await auditLog(db).countDocuments({ action: "login_failed", ipHash: ip, createdAt: { $gte: since } });
+      const found = await accounts(db).findOne({ $or: [{ usernameLower: login }, { email: login }], disabled: false });
+      const acc = found && (await verifyPassword(data.password, found.passwordHash)) ? found : null;
+      if (acc) await accounts(db).updateOne({ _id: acc._id }, { $set: { lastLoginAt: new Date() } });
+      return { count, acc };
+    });
+    if (count >= MAX_FAILED_LOGINS) {
       return { ok: false as const, error: `Too many failed attempts. Try again in ${LOCK_MINUTES} minutes.` };
     }
-    const { data: id } = await db.rpc("admin_check_password", { _login: data.login, _password: data.password });
-    if (!id) {
+    if (!acc) {
       await audit(null, "login_failed", { login: data.login.slice(0, 80) });
       return { ok: false as const, error: "Wrong username or password." };
     }
-    const { data: acc } = await db.from("admin_accounts").select("id, username").eq("id", id).single();
-    await db.from("admin_accounts").update({ last_login_at: new Date().toISOString() }).eq("id", id);
-    await createSession(id);
-    await audit(acc, "login");
+    await createSession(acc._id);
+    await audit({ id: acc._id, username: acc.username }, "login");
     return { ok: true as const };
   });
 
@@ -48,37 +51,24 @@ export const adminLogout = createServerFn({ method: "POST" }).handler(async () =
 
 /* ---------- Analytics ---------- */
 
-type Stats = {
-  views: number; visitors: number; today: number;
-  daily: { day: string; views: number; visitors: number }[];
-  paths: { path: string; views: number; visitors: number }[];
-  articles: { slug: string; views: number; visitors: number }[];
-  referrers: { referrer: string; views: number }[];
-  devices: { device: string; views: number }[];
-  hours: { hour: number; views: number }[];
-};
+type Stats = import("./admin.server").Stats;
 
 export const adminStats = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ days: z.number().int().min(1).max(365), slug: z.string().max(300).nullable().optional() }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb } = await srv();
+    const { requireAdmin, viewStats } = await srv();
     await requireAdmin("editor");
-    const db = await adminDb();
-    const { data: s, error } = await db.rpc("admin_view_stats", data.slug ? { _days: data.days, _slug: data.slug } : { _days: data.days });
-    if (error) throw new Error("Could not load visit numbers");
-    return s as unknown as Stats;
+    return viewStats(data.days, data.slug ?? null);
   });
 
 export const adminOverview = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin, adminDb, loadSettings } = await srv();
+  const { requireAdmin, adminDb, loadSettings, viewStats, auditLog } = await srv();
   const me = await requireAdmin("editor");
-  const db = await adminDb();
   const { withDb } = await import("./community.server");
   const [stats, settings, failed, mongo, members] = await Promise.all([
-    db.rpc("admin_view_stats", { _days: 30 }).then((r) => r.data as unknown as Stats),
+    viewStats(30),
     loadSettings(),
-    db.from("admin_audit_log").select("id", { count: "exact", head: true }).eq("action", "login_failed")
-      .gte("created_at", new Date(Date.now() - 86_400_000).toISOString()).then((r) => r.count ?? 0),
+    adminDb((db) => auditLog(db).countDocuments({ action: "login_failed", createdAt: { $gte: new Date(Date.now() - 86_400_000) } })),
     withDb(async (m) => {
       const [published, paused, comments, commentsToday, readers] = await Promise.all([
         m.collection("articles").countDocuments({ status: "published" }),
@@ -89,7 +79,7 @@ export const adminOverview = createServerFn({ method: "GET" }).handler(async () 
       ]);
       return { published, paused, comments, commentsToday, readers };
     }).catch(() => null),
-    me.role === "admin" ? db.auth.admin.listUsers({ page: 1, perPage: 1 }).then((r) => (r.data as { total?: number })?.total ?? null).catch(() => null) : Promise.resolve(null),
+    me.role === "admin" ? withDb((m) => m.collection("users").countDocuments({})).catch(() => null) : Promise.resolve(null),
   ]);
   return { stats, settings, failedLogins24h: failed, mongo, members };
 });
@@ -131,10 +121,9 @@ export const adminListArticles = createServerFn({ method: "GET" })
     featured: z.enum(["all", "featured", "regular"]).default("all"),
   }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb } = await srv();
+    const { requireAdmin, viewStats } = await srv();
     await requireAdmin("editor");
     const { withDb } = await import("./community.server");
-    const db = await adminDb();
     const and: Record<string, unknown>[] = [];
     for (const w of queryWords(data.q)) { const rx = { $regex: escapeRegex(w), $options: "i" }; and.push({ $or: [{ title: rx }, { slug: rx }, { section: rx }] }); }
     const since = sinceDate(data.days);
@@ -153,7 +142,7 @@ export const adminListArticles = createServerFn({ method: "GET" })
         ]);
         return { docs, total, sections: sections ? (sections as unknown[]).filter((x): x is string => typeof x === "string" && !!x).sort() : null };
       }),
-      db.rpc("admin_view_stats", { _days: 365 }).then((r) => r.data as unknown as Stats),
+      viewStats(365),
     ]);
     const views = new Map(stats.articles.map((a) => [a.slug, a]));
     const rows = docs.map((d) => ({
@@ -318,9 +307,7 @@ function allReaders() {
 }
 
 async function loadAllReaders(): Promise<ReaderRow[]> {
-  const { adminDb } = await srv();
-  const db = await adminDb();
-  const { withDb } = await import("./community.server");
+  const { withDb, decrypt } = await import("./community.server");
   type Agg = { _id: string; n: number };
   const [profiles, counts, replyCounts, inter, received] = await withDb(async (m) => Promise.all([
     m.collection<{ _id: string; username: string; createdAt: Date }>("communityProfiles").find({}, { projection: { username: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(10000).toArray(),
@@ -335,14 +322,9 @@ async function loadAllReaders(): Promise<ReaderRow[]> {
   for (const i of inter) (i._id.k === "like" ? likeM : i._id.k === "save" ? saveM : new Map()).set(String(i._id.u), i.n);
   const extra = (id: string) => ({ replies: rc.get(id) ?? 0, likes: likeM.get(id) ?? 0, saves: saveM.get(id) ?? 0, likesReceived: rec.get(id) ?? 0 });
   const users = new Map<string, { email: string; created: string; last: string | null; banned: boolean; username: string }>();
-  for (let page = 1; page <= 20; page++) {
-    const { data: res, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error("Could not load reader accounts");
-    for (const u of res.users) {
-      const until = (u as { banned_until?: string | null }).banned_until;
-      users.set(u.id, { email: u.email ?? "", created: u.created_at, last: u.last_sign_in_at ?? null, banned: !!until && new Date(until) > new Date(), username: (u.user_metadata?.["username"] as string | undefined) ?? "" });
-    }
-    if (res.users.length < 1000) break;
+  const accounts = await withDb((m) => m.collection<import("./auth.server").UserDoc>("users").find({}, { projection: { passwordHash: 0 } }).limit(20000).toArray());
+  for (const u of accounts) {
+    users.set(u._id, { email: await decrypt(u.emailEnc), created: u.createdAt.toISOString(), last: u.lastSignInAt ? u.lastSignInAt.toISOString() : null, banned: !!u.blocked, username: u.username });
   }
   const n = new Map(counts.map((c) => [String(c._id), c.n]));
   const rows: ReaderRow[] = profiles.map((p) => {
@@ -384,11 +366,15 @@ export const adminListReaders = createServerFn({ method: "GET" })
 export const adminSetMemberBlocked = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().uuid(), blocked: z.boolean() }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, audit } = await srv();
     const me = await requireAdmin("admin");
-    const db = await adminDb();
-    const { error } = await db.auth.admin.updateUserById(data.id, { ban_duration: data.blocked ? "876000h" : "none" });
-    if (error) throw new Error(error.message);
+    const { authDb, users, userSessions } = await import("./auth.server");
+    const r = await authDb(async (db) => {
+      const r = await users(db).updateOne({ _id: data.id }, { $set: { blocked: data.blocked } });
+      if (data.blocked) await userSessions(db).deleteMany({ userId: data.id });
+      return r;
+    });
+    if (!r.matchedCount) throw new Error("This reader has no sign-in account");
     clearReaderCache();
     await audit(me, data.blocked ? "member_blocked" : "member_unblocked", { id: data.id });
     return { ok: true };
@@ -397,13 +383,14 @@ export const adminSetMemberBlocked = createServerFn({ method: "POST" })
 export const adminDeleteMember = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().min(1).max(100) }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, audit } = await srv();
     const me = await requireAdmin("admin");
-    const db = await adminDb();
-    const { error } = await db.auth.admin.deleteUser(data.id);
-    if (error && !/not.?found/i.test(error.message)) throw new Error(error.message);
     const { withDb } = await import("./community.server");
-    await withDb((m) => m.collection("communityProfiles").deleteOne({ _id: data.id as never }));
+    await withDb((m) => Promise.all([
+      m.collection("users").deleteOne({ _id: data.id as never }),
+      m.collection("userSessions").deleteMany({ userId: data.id }),
+      m.collection("communityProfiles").deleteOne({ _id: data.id as never }),
+    ]));
     clearReaderCache();
     await audit(me, "member_deleted", { id: data.id });
     return { ok: true };
@@ -412,13 +399,15 @@ export const adminDeleteMember = createServerFn({ method: "POST" })
 /* ---------- Security & site controls ---------- */
 
 export const adminSecurity = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin, adminDb, loadSettings } = await srv();
+  const { requireAdmin, adminDb, loadSettings, sessions: sessCol, accounts } = await srv();
   const me = await requireAdmin("admin");
-  const db = await adminDb();
   const [settings, sessions] = await Promise.all([
     loadSettings(),
-    db.from("admin_sessions").select("id, created_at, last_seen_at, expires_at, user_agent, admin_accounts!inner(username)")
-      .is("revoked_at", null).gt("expires_at", new Date().toISOString()).order("last_seen_at", { ascending: false }).limit(50).then((r) => r.data ?? []),
+    adminDb(async (db) => {
+      const list = await sessCol(db).find({ revokedAt: null, expiresAt: { $gt: new Date() } }).sort({ lastSeenAt: -1 }).limit(50).toArray();
+      const names = new Map((await accounts(db).find({ _id: { $in: [...new Set(list.map((s) => s.accountId))] } }, { projection: { username: 1 } }).toArray()).map((a) => [a._id, a.username]));
+      return list.map((s) => ({ id: s._id, created_at: s.createdAt.toISOString(), last_seen_at: s.lastSeenAt.toISOString(), expires_at: s.expiresAt.toISOString(), user_agent: s.userAgent, admin_accounts: { username: names.get(s.accountId) ?? "removed" } }));
+    }),
   ]);
   return {
     settings,
@@ -438,25 +427,25 @@ export const ADMIN_ACTIONS = [
 export const adminActivityLog = createServerFn({ method: "GET" })
   .inputValidator((d) => pageInput.extend({ who: z.string().max(100).default("all"), action: z.string().max(60).default("all") }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb } = await srv();
+    const { requireAdmin, adminDb, auditLog, accounts } = await srv();
     await requireAdmin("admin");
-    const db = await adminDb();
-    let query = db.from("admin_audit_log").select("id, username, action, detail, ip_hash, created_at", { count: "exact" });
+    const and: Record<string, unknown>[] = [];
     const since = sinceDate(data.days);
-    if (since) query = query.gte("created_at", since.toISOString());
-    if (data.who !== "all") query = data.who === "—" ? query.is("username", null) : query.eq("username", data.who);
-    if (data.action !== "all") query = query.eq("action", data.action);
-    for (const w of queryWords(data.q)) {
-      const like = `%${w.replace(/[%_,()]/g, "")}%`;
-      query = query.or(`username.ilike.${like},action.ilike.${like}`);
-    }
-    const [{ data: log, count, error }, people] = await Promise.all([
-      query.order("created_at", { ascending: false }).range(data.offset, data.offset + data.limit - 1),
-      data.offset === 0 ? db.from("admin_accounts").select("username").order("username").then((r) => (r.data ?? []).map((a) => a.username)) : Promise.resolve(null),
-    ]);
-    if (error) throw new Error("Could not load admin activity");
-    const rows = (log ?? []).map((l) => ({ id: l.id, username: l.username, action: l.action, detail: JSON.stringify(l.detail ?? {}), network: (l.ip_hash ?? "").slice(0, 8), at: l.created_at }));
-    return { ...toPage(rows, count ?? 0, data.offset), people, actions: data.offset === 0 ? [...ADMIN_ACTIONS] : null };
+    if (since) and.push({ createdAt: { $gte: since } });
+    if (data.who !== "all") and.push({ username: data.who === "—" ? null : data.who });
+    if (data.action !== "all") and.push({ action: data.action });
+    for (const w of queryWords(data.q)) { const rx = { $regex: escapeRegex(w), $options: "i" }; and.push({ $or: [{ username: rx }, { action: rx }] }); }
+    const filter = and.length ? { $and: and } : {};
+    const { log, count, people } = await adminDb(async (db) => {
+      const [log, count, people] = await Promise.all([
+        auditLog(db).find(filter).sort({ createdAt: -1 }).skip(data.offset).limit(data.limit).toArray(),
+        auditLog(db).countDocuments(filter),
+        data.offset === 0 ? accounts(db).find({}, { projection: { username: 1 } }).sort({ usernameLower: 1 }).toArray().then((r) => r.map((a) => a.username)) : Promise.resolve(null),
+      ]);
+      return { log, count, people };
+    });
+    const rows = log.map((l) => ({ id: l._id, username: l.username, action: l.action, detail: JSON.stringify(l.detail ?? {}), network: (l.ipHash ?? "").slice(0, 8), at: l.createdAt.toISOString() }));
+    return { ...toPage(rows, count, data.offset), people, actions: data.offset === 0 ? [...ADMIN_ACTIONS] : null };
   });
 
 export type ReaderActivityKind = "comment" | "reply" | "story_like" | "save" | "comment_like";
@@ -512,10 +501,9 @@ export const adminUpdateSettings = createServerFn({ method: "POST" })
     signups_enabled: z.boolean(), comments_enabled: z.boolean(),
   }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, saveSettings, audit } = await srv();
     const me = await requireAdmin("admin");
-    const db = await adminDb();
-    await db.from("site_settings").update({ ...data, updated_at: new Date().toISOString() }).eq("id", 1);
+    await saveSettings(data);
     await audit(me, "settings_changed", data);
     return { ok: true };
   });
@@ -523,13 +511,13 @@ export const adminUpdateSettings = createServerFn({ method: "POST" })
 export const adminRevokeSession = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().uuid().nullable() }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, adminDb, sessions, audit } = await srv();
     const me = await requireAdmin("admin");
-    const db = await adminDb();
-    const now = new Date().toISOString();
+    const now = new Date();
     // null = sign out every other device
-    if (data.id) await db.from("admin_sessions").update({ revoked_at: now }).eq("id", data.id);
-    else await db.from("admin_sessions").update({ revoked_at: now }).is("revoked_at", null).neq("id", me.sessionId);
+    await adminDb((db) => data.id
+      ? sessions(db).updateOne({ _id: data.id }, { $set: { revokedAt: now } })
+      : sessions(db).updateMany({ revokedAt: null, _id: { $ne: me.sessionId } }, { $set: { revokedAt: now } }));
     await audit(me, data.id ? "session_revoked" : "all_sessions_revoked", {});
     return { ok: true };
   });
@@ -537,11 +525,10 @@ export const adminRevokeSession = createServerFn({ method: "POST" })
 /* ---------- Team (admin accounts) ---------- */
 
 export const adminListTeam = createServerFn({ method: "GET" }).handler(async () => {
-  const { requireAdmin, adminDb } = await srv();
+  const { requireAdmin, adminDb, accounts } = await srv();
   await requireAdmin("admin");
-  const db = await adminDb();
-  const { data } = await db.from("admin_accounts").select("id, username, email, role, disabled, created_at, last_login_at").order("created_at");
-  return data ?? [];
+  const list = await adminDb((db) => accounts(db).find({}, { projection: { passwordHash: 0 } }).sort({ createdAt: 1 }).toArray());
+  return list.map((a) => ({ id: a._id, username: a.username, email: a.email, role: a.role, disabled: a.disabled, created_at: a.createdAt.toISOString(), last_login_at: a.lastLoginAt ? a.lastLoginAt.toISOString() : null }));
 });
 
 const pw = z.string().min(8, "Use at least 8 characters").max(200);
@@ -549,12 +536,14 @@ const pw = z.string().min(8, "Use at least 8 characters").max(200);
 export const adminCreateEditor = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ username: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_.-]+$/), email: z.string().trim().email().max(254), password: pw }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, adminDb, accounts, hashPassword, audit } = await srv();
     const me = await requireAdmin("admin");
-    const db = await adminDb();
-    const { data: hash } = await db.rpc("admin_hash_password", { _password: data.password });
-    const { error } = await db.from("admin_accounts").insert({ username: data.username, email: data.email.toLowerCase(), password_hash: hash as string, role: "editor" });
-    if (error) throw new Error(error.code === "23505" ? "That username or email is already used" : "Could not add this person");
+    const passwordHash = await hashPassword(data.password);
+    try {
+      await adminDb((db) => accounts(db).insertOne({ _id: crypto.randomUUID(), username: data.username, usernameLower: data.username.toLowerCase(), email: data.email.toLowerCase(), passwordHash, role: "editor", disabled: false, createdAt: new Date(), lastLoginAt: null }));
+    } catch (e) {
+      throw new Error((e as { code?: number }).code === 11000 ? "That username or email is already used" : "Could not add this person");
+    }
     await audit(me, "editor_added", { username: data.username });
     return { ok: true };
   });
@@ -562,25 +551,29 @@ export const adminCreateEditor = createServerFn({ method: "POST" })
 export const adminUpdateTeamMember = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ id: z.string().uuid(), disabled: z.boolean().optional(), remove: z.boolean().optional(), password: pw.optional() }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, adminDb, accounts, sessions, hashPassword, audit } = await srv();
     const me = await requireAdmin("admin");
     if (data.id === me.id) throw new Error("Use My account to change your own login");
-    const db = await adminDb();
-    const { data: target } = await db.from("admin_accounts").select("username, role").eq("id", data.id).single();
-    if (!target) throw new Error("Account not found");
-    if (target.role === "admin" && (data.remove || data.disabled)) throw new Error("Full admin accounts cannot be removed here");
-    if (data.remove) {
-      await db.from("admin_accounts").delete().eq("id", data.id);
+    const passwordHash = data.password ? await hashPassword(data.password) : null;
+    const target = await adminDb(async (db) => {
+      const target = await accounts(db).findOne({ _id: data.id }, { projection: { username: 1, role: 1 } });
+      if (!target) throw new Error("Account not found");
+      if (target.role === "admin" && (data.remove || data.disabled)) throw new Error("Full admin accounts cannot be removed here");
+      if (data.remove) {
+        await accounts(db).deleteOne({ _id: data.id });
+        await sessions(db).deleteMany({ accountId: data.id });
+        return { ...target, removed: true };
+      }
+      if (data.disabled !== undefined) {
+        await accounts(db).updateOne({ _id: data.id }, { $set: { disabled: data.disabled } });
+        if (data.disabled) await sessions(db).updateMany({ accountId: data.id, revokedAt: null }, { $set: { revokedAt: new Date() } });
+      }
+      if (passwordHash) await accounts(db).updateOne({ _id: data.id }, { $set: { passwordHash } });
+      return { ...target, removed: false };
+    });
+    if (target.removed) {
       await audit(me, "editor_removed", { username: target.username });
       return { ok: true };
-    }
-    if (data.disabled !== undefined) {
-      await db.from("admin_accounts").update({ disabled: data.disabled }).eq("id", data.id);
-      if (data.disabled) await db.from("admin_sessions").update({ revoked_at: new Date().toISOString() }).eq("account_id", data.id).is("revoked_at", null);
-    }
-    if (data.password) {
-      const { data: hash } = await db.rpc("admin_hash_password", { _password: data.password });
-      await db.from("admin_accounts").update({ password_hash: hash as string }).eq("id", data.id);
     }
     await audit(me, "editor_updated", { username: target.username, disabled: data.disabled, passwordReset: !!data.password });
     return { ok: true };
@@ -594,16 +587,20 @@ export const adminUpdateMyAccount = createServerFn({ method: "POST" })
     newPassword: z.string().max(200).optional(),
   }).parse(d))
   .handler(async ({ data }) => {
-    const { requireAdmin, adminDb, audit } = await srv();
+    const { requireAdmin, adminDb, accounts, hashPassword, verifyPassword, audit } = await srv();
     const me = await requireAdmin("editor");
-    const db = await adminDb();
-    const { data: ok } = await db.rpc("admin_check_password", { _login: me.username, _password: data.currentPassword });
-    if (ok !== me.id) return { ok: false as const, error: "Your current password is not right." };
     if (data.newPassword && data.newPassword.length < 8) return { ok: false as const, error: "A new password needs at least 8 characters." };
-    const patch: { username: string; email: string; password_hash?: string } = { username: data.username, email: data.email.toLowerCase() };
-    if (data.newPassword) patch.password_hash = (await db.rpc("admin_hash_password", { _password: data.newPassword })).data as string;
-    const { error } = await db.from("admin_accounts").update(patch).eq("id", me.id);
-    if (error) return { ok: false as const, error: error.code === "23505" ? "That username or email is already used." : "Could not save." };
+    const res = await adminDb(async (db) => {
+      const acc = await accounts(db).findOne({ _id: me.id });
+      if (!acc || !(await verifyPassword(data.currentPassword, acc.passwordHash))) return "Your current password is not right.";
+      const patch: Record<string, unknown> = { username: data.username, usernameLower: data.username.toLowerCase(), email: data.email.toLowerCase() };
+      if (data.newPassword) patch["passwordHash"] = await hashPassword(data.newPassword);
+      try { await accounts(db).updateOne({ _id: me.id }, { $set: patch }); } catch (e) {
+        return (e as { code?: number }).code === 11000 ? "That username or email is already used." : "Could not save.";
+      }
+      return null;
+    });
+    if (res) return { ok: false as const, error: res };
     await audit(me, "account_updated", { username: data.username, passwordChanged: !!data.newPassword });
     return { ok: true as const };
   });
@@ -611,16 +608,6 @@ export const adminUpdateMyAccount = createServerFn({ method: "POST" })
 /* ---------- Public: site status for the maintenance screen ---------- */
 
 export const getSiteStatus = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    const { createClient } = await import("@supabase/supabase-js");
-    const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
-    const sb = createClient(process.env["SUPABASE_URL"]!, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: (input, init) => { const h = new Headers(init?.headers); if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) h.delete("Authorization"); h.set("apikey", key); return fetch(input, { ...init, headers: h }); } },
-    });
-    const { data } = await sb.from("site_settings").select("maintenance_mode, maintenance_message, signups_enabled, comments_enabled").eq("id", 1).maybeSingle();
-    return data ?? { maintenance_mode: false, maintenance_message: "", signups_enabled: true, comments_enabled: true };
-  } catch {
-    return { maintenance_mode: false, maintenance_message: "", signups_enabled: true, comments_enabled: true };
-  }
+  const { loadSettings, DEFAULT_SETTINGS } = await srv();
+  return loadSettings().catch(() => ({ ...DEFAULT_SETTINGS, maintenance_message: "" }));
 });

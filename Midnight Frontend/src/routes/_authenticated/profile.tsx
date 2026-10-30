@@ -5,7 +5,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Bookmark, Heart, LogOut, MessageSquare, Reply, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { changePassword } from "@/lib/signup.functions";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { PasswordField } from "@/components/password-field";
@@ -167,8 +167,8 @@ function Settings({ profile, email, onSignOut }: { profile: { username: string; 
     mutationFn: () => updateMyProfile({ data: { username: form.username.trim(), displayName: form.displayName.trim(), bio: form.bio.trim() } }),
     onSuccess: async (r) => {
       if (!r.ok) return setErrors({ username: r.error });
-      await supabase.auth.updateUser({ data: { username: form.username.trim() } });
       qc.invalidateQueries({ queryKey: ["me"] });
+      qc.invalidateQueries({ queryKey: ["auth", "me"] });
       toast.success("Profile saved");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -236,12 +236,9 @@ function ChangePassword({ email }: { email: string }) {
     setErrors(errs);
     if (Object.values(errs).some(Boolean)) return;
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password: next, current_password: current } as never);
+    const res = await changePassword({ data: { current, next } }).catch((e: Error) => ({ ok: false as const, error: e.message }));
     setBusy(false);
-    if (error) {
-      const m = error.message.toLowerCase();
-      return setErrors({ form: m.includes("current") || m.includes("invalid") ? "Your current password is incorrect" : m.includes("pwned") ? "This password has appeared in a data breach. Choose another." : error.message });
-    }
+    if (!res.ok) return setErrors({ form: res.error });
     setCurrent(""); setNext(""); setConfirm("");
     toast.success("Password changed");
   };
