@@ -123,3 +123,8 @@
 - [x] Each trend opens its own page.
 - [x] Checked hashtag dropdown and sort buttons.
 - [x] Removed the 3 sample trends and the sample Midnight Report (Oct 27).
+
+# MongoDB-only backend (Oct 30, 13:04)
+- [x] Confirm sign-in, sign-up and all user data run on MongoDB only (code already does).
+- [x] Add .env.example listing every setting the code reads.
+- [x] Save MONGODB_URI and COMMUNITY_ENCRYPTION_KEY securely (waiting on user).

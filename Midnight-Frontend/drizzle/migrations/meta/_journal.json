@@ -22,6 +22,13 @@
       "when": 1793363879799,
       "tag": "0002_midnight_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793365403305,
+      "tag": "0003_midnight_schema",
+      "breakpoints": true
     }
   ]
 }
