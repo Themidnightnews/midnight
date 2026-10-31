@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { PageLock } from "@/components/page-lock";
 import { AccountButton } from "@/components/account-button";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { articles, navigationSections, searchArticles, slugify } from "@/data/news";
-import { ChevronDown, Menu, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { IconTip, MidnightLogo, moreCategories } from "@/components/news-bits";
+import { useAuth } from "@/hooks/use-auth";
 
 const mainItems = ["World", "Politics", "Tech", "US", "Europe", "Africa", "Asia", "Middle East", "Latin America", "Oceania", "Business", "Climate", "Opinion"];
 const allCategories = () => navigationSections([...mainItems, "Sport", "Culture", "Health & Science", ...moreCategories]);
@@ -29,6 +31,17 @@ const configs: Cfg[] = [
 ];
 const MIN_STRIP = 90;
 
+// Premium hamburger: three rounded lines of decreasing length (top longest).
+function PremiumMenuIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden className={className}>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="9" y1="12" x2="21" y2="12" />
+      <line x1="15" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
 const slugOf = (name: string) => slugify(name);
 
 function MoreCategories() {
@@ -42,6 +55,8 @@ function MoreCategories() {
     timer.current = setTimeout(() => setOpen(false), 150);
   };
   return (
+    <>
+    <PageLock active={open} onClose={() => setOpen(false)} />
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger onMouseEnter={enter} onMouseLeave={leave} className="flex items-center gap-1 whitespace-nowrap outline-hidden">
         More categories <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
@@ -60,11 +75,13 @@ function MoreCategories() {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }
 
 export function SiteHeader() {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -82,12 +99,6 @@ export function SiteHeader() {
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [menuOpen]);
 
   useEffect(() => {
     if (searchOpen) inputRef.current?.focus();
@@ -101,6 +112,11 @@ export function SiteHeader() {
     const m = measureRef.current;
     if (!nav || !m) return;
     const compute = () => {
+      // Small screens: no moving strip — the search bar fills the header instead.
+      if (window.innerWidth < 768) {
+        setCfg({ strip: false, more: false, signIn: false, wordmark: false, report: false });
+        return;
+      }
       const w = (k: string) => (m.querySelector(`[data-m="${k}"]`) as HTMLElement | null)?.offsetWidth ?? 0;
       const avail = nav.clientWidth - 24 - 10; // nav padding
       const NAVGAP = 24;
@@ -117,8 +133,12 @@ export function SiteHeader() {
     compute();
     const ro = new ResizeObserver(compute);
     ro.observe(nav);
+    window.addEventListener("resize", compute);
     document.fonts?.ready.then(compute);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", compute);
+    };
   }, []);
 
   const needsBurger = !cfg.strip || !cfg.more;
@@ -132,6 +152,7 @@ export function SiteHeader() {
 
   return (
     <>
+    <PageLock active={menuOpen || searchOpen} onClose={() => { setMenuOpen(false); setSearchOpen(false); }} />
     <div aria-hidden className="header-haze pointer-events-none fixed inset-x-0 top-0 z-40 h-28" />
     <header ref={headerRef} className="fixed inset-x-0 top-4 z-50 mx-auto max-w-7xl px-4">
       {/* Invisible copies used to measure natural widths */}
@@ -143,14 +164,29 @@ export function SiteHeader() {
         <span data-m="report" className="px-6 font-bold">The Report</span>
       </div>
 
-      <nav ref={navRef} className="glass flex items-center justify-between gap-4 rounded-full py-2.5 pr-2.5 pl-6">
-        <div className="flex min-w-0 flex-1 items-center gap-6">
+      <nav ref={navRef} className="glass flex items-center justify-between gap-3 rounded-full py-2.5 pr-2.5 pl-6 sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-6">
             <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex shrink-0 items-center gap-2 text-2xl font-extrabold tracking-tight">
               <MidnightLogo />
-              {cfg.wordmark && <span>midnight</span>}
+              {cfg.wordmark && <span className="hidden md:inline">midnight</span>}
             </Link>
+          {(
+            <Button variant="ghost"
+              ref={searchButtonRef}
+              aria-label="Search"
+              aria-expanded={searchOpen}
+              onClick={() => {
+                setSearchOpen((o) => !o);
+                setMenuOpen(false);
+              }}
+              className={`flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight [&_svg]:size-6 ${cfg.signIn ? "md:hidden" : ""} ${searchOpen ? "bg-secondary" : ""}`}
+            >
+              <Search className="h-6 w-6 shrink-0" />
+              <span className="truncate">Search Midnight…</span>
+            </Button>
+          )}
           {cfg.strip && (
-            <div className="nav-strip min-w-0 flex-1 overflow-hidden">
+            <div className="nav-strip hidden min-w-0 flex-1 overflow-hidden md:block">
               <ul className="animate-nav-strip flex w-max items-center text-[15px] font-medium whitespace-nowrap">
                 {[0, 1].map((copy) =>
                   ["Explore", "Trends", ...mainItems, "The Midnight Report"].map((i) => (
@@ -169,12 +205,13 @@ export function SiteHeader() {
             </div>
           )}
           {cfg.more && (
-            <div className="shrink-0 text-[15px] font-medium">
+            <div className="hidden shrink-0 text-[15px] font-medium md:block">
               <MoreCategories />
             </div>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0 sm:gap-2 md:gap-4 lg:gap-5 xl:gap-6">
+          {cfg.signIn && (
             <Button variant="ghost"
               ref={searchButtonRef}
               aria-label="Search"
@@ -183,18 +220,17 @@ export function SiteHeader() {
                 setSearchOpen((o) => !o);
                 setMenuOpen(false);
               }}
-              className={cfg.signIn
-                ? `flex h-11 w-52 items-center gap-2 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight xl:w-64 ${searchOpen ? "bg-secondary" : ""}`
-                : `grid h-11 w-9 place-items-center rounded-full hover:bg-navigation-highlight sm:w-11 ${searchOpen ? "bg-secondary" : ""}`}
+              className={`hidden h-12 w-52 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight md:flex xl:w-64 [&_svg]:size-6 ${searchOpen ? "bg-secondary" : ""}`}
             >
-              <Search className="h-5 w-5 shrink-0" />
-              {cfg.signIn && <span className="truncate">Search Midnight…</span>}
+              <Search className="h-6 w-6 shrink-0" />
+              <span className="truncate">Search Midnight…</span>
             </Button>
-          {cfg.signIn && <AccountButton />}
-          {cfg.report && (
-            <Button asChild className="h-11 rounded-full px-6 font-bold"><Link to="/midnight-report">The Report</Link></Button>
           )}
-          {needsBurger && (
+          {cfg.signIn && <div className="hidden md:block"><AccountButton /></div>}
+          {cfg.report && (
+            <Button asChild className="hidden h-11 rounded-full px-6 font-bold md:inline-flex"><Link to="/midnight-report">The Report</Link></Button>
+          )}
+          {(
             <IconTip label={menuOpen ? "Close menu" : "Open all sections"}>
               <Button variant="ghost"
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -203,9 +239,9 @@ export function SiteHeader() {
                   setMenuOpen((o) => !o);
                   setSearchOpen(false);
                 }}
-                className="grid h-11 w-9 place-items-center rounded-full hover:bg-navigation-highlight sm:w-11"
+                className={`grid h-12 w-12 place-items-center rounded-full border hover:bg-navigation-highlight [&_svg]:size-7 ${menuOpen ? "border-border bg-navigation-highlight shadow-sm" : "border-transparent"} ${needsBurger ? "" : "md:hidden"}`}
               >
-                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                {menuOpen ? <X className="h-7 w-7" /> : <PremiumMenuIcon className="h-7 w-7" />}
               </Button>
             </IconTip>
           )}
@@ -257,9 +293,8 @@ export function SiteHeader() {
       )}
 
       {menuOpen && (
-        <div className="glass mt-3 max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain rounded-[1.75rem] p-4">
-          <ul className="grid gap-1 text-base font-semibold sm:grid-cols-2">
-            <li><Link to="/midnight-report" onClick={() => setMenuOpen(false)} className="nav-hover block rounded-xl px-4 py-2.5">The Midnight Report</Link></li>
+        <div aria-label="All sections" className="glass mt-3 flex max-h-[calc(100dvh-7rem)] flex-col overflow-hidden rounded-[1.75rem]">
+          <ul className="grid min-h-0 gap-1 overflow-y-auto overscroll-contain p-4 text-base font-semibold sm:grid-cols-2">
             <li>
               <Link to="/explore" onClick={() => setMenuOpen(false)} activeProps={{ className: "nav-selected font-extrabold" }} className="block rounded-xl px-4 py-2.5 hover:bg-navigation-highlight">Explore</Link>
             </li>
@@ -272,12 +307,14 @@ export function SiteHeader() {
               </li>
             ))}
           </ul>
-          {(!cfg.signIn || !cfg.report) && (
-            <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3">
-              <AccountButton onNavigate={() => setMenuOpen(false)} />
-              <Button asChild className="rounded-full"><Link to="/midnight-report" onClick={() => setMenuOpen(false)}>The Report</Link></Button>
-            </div>
-          )}
+          <div aria-label="Menu actions" className="grid shrink-0 grid-cols-2 items-center gap-3 border-t border-navigation-border px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            {user || loading ? <AccountButton onNavigate={() => setMenuOpen(false)} /> : (
+              <Button asChild variant="outline" className="h-11 rounded-full font-semibold">
+                <Link to="/auth" search={{ mode: "signup" }} onClick={() => setMenuOpen(false)}>Sign up</Link>
+              </Button>
+            )}
+            <Button asChild className="h-11 rounded-full font-bold"><Link to="/midnight-report" onClick={() => setMenuOpen(false)}>The Report</Link></Button>
+          </div>
         </div>
       )}
     </header>

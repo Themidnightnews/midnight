@@ -248,7 +248,7 @@ header:hover .animate-nav-strip { animation-play-state: paused; }
   transition: transform 0.4s ease, box-shadow 0.4s ease;
   &:hover { transform: translateY(-2px); box-shadow: 0 40px 80px -24px oklch(0.3 0.12 300 / 60%), inset 0 1px 0 oklch(1 0 0 / 35%); }
 }
-@keyframes featured-enter { from { opacity: 0; filter: blur(10px); transform: scale(0.97); } to { opacity: 1; filter: blur(0); transform: none; } }
+@keyframes featured-enter { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 .featured-enter { animation: featured-enter 900ms cubic-bezier(.22,1,.36,1) both; }
 .featured-enter:nth-child(2) { animation-delay: 140ms; }
 @media (prefers-reduced-motion: reduce) {
@@ -329,8 +329,8 @@ header:hover .animate-nav-strip { animation-play-state: paused; }
 }
 .pill-filter, .pill-filter:focus, .pill-filter:focus-visible { outline: none; }
 /* Hero crossfade: new story settles in from a soft zoom and blur while the old one dissolves beneath */
-@keyframes hero-enter { from { opacity: 0; filter: blur(14px); transform: scale(1.04); } to { opacity: 1; filter: blur(0); transform: none; } }
-@keyframes hero-exit { from { opacity: 1; filter: blur(0); } to { opacity: 0; filter: blur(8px); } }
+@keyframes hero-enter { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+@keyframes hero-exit { from { opacity: 1; } to { opacity: 0; } }
 .hero-enter { animation: hero-enter 1200ms cubic-bezier(.22,1,.36,1) both; }
 .hero-exit { animation: hero-exit 1000ms ease-out both; pointer-events: none; }
 
@@ -703,3 +703,14 @@ textarea.admin-input { line-height: 1.6; resize: vertical; }
   .admin-media-actions { flex-shrink: 0; }
   .admin-media-actions > .admin-btn { flex: none; }
 }
+
+/* Open menus and pop-ups: invisible shield that blocks the page behind (header stays above at z-50) */
+.page-lock { position: fixed; inset: 0; z-index: 45; background: transparent; touch-action: none; }
+
+/* Notifications appear in the middle of the screen */
+.toaster-center[data-sonner-toaster] { top: calc(50% - var(--front-toast-height, 3.5rem) / 2) !important; bottom: auto !important; }
+
+/* Header glass: give each blurred layer its own compositing layer so phones never flash an unblurred pane on first paint */
+.header-haze, header nav.glass { transform: translateZ(0); will-change: transform; }
+.header-haze { animation: haze-in 400ms ease-out both; }
+@keyframes haze-in { from { opacity: 0; } to { opacity: 1; } }

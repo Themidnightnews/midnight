@@ -75,7 +75,7 @@ export async function createSession(accountId: string) {
     userAgent: (getRequestHeader("user-agent") ?? "").slice(0, 300), createdAt: new Date(), lastSeenAt: new Date(), expiresAt: expires, revokedAt: null,
   };
   await adminDb((db) => sessions(db).insertOne(doc));
-  setCookie(ADMIN_COOKIE, token, { httpOnly: true, secure: true, sameSite: "strict", path: "/", expires });
+  setCookie(ADMIN_COOKIE, token, { httpOnly: true, secure: true, sameSite: "none", partitioned: true, path: "/", expires });
 }
 
 export async function endSession() {
@@ -84,7 +84,7 @@ export async function endSession() {
     const tokenHash = await sha256(token);
     await adminDb((db) => sessions(db).updateOne({ tokenHash }, { $set: { revokedAt: new Date() } }));
   }
-  deleteCookie(ADMIN_COOKIE, { path: "/" });
+  deleteCookie(ADMIN_COOKIE, { path: "/", secure: true, sameSite: "none", partitioned: true });
 }
 
 /** Current admin from the session cookie, or null. Expiry and revocation are checked on every request. */

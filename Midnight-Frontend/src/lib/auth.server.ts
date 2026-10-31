@@ -45,7 +45,7 @@ export async function startSession(db: Db, userId: string) {
   const expires = new Date(now.getTime() + idleMs());
   await userSessions(db).insertOne({ _id: crypto.randomUUID(), userId, tokenHash: await sha256(token), createdAt: now, lastSeenAt: now, expiresAt: expires, userAgent: (getRequestHeader("user-agent") ?? "").slice(0, 300) });
   await users(db).updateOne({ _id: userId }, { $set: { lastSignInAt: now } });
-  setCookie(USER_COOKIE, token, { httpOnly: true, secure: true, sameSite: "lax", path: "/", expires });
+  setCookie(USER_COOKIE, token, { httpOnly: true, secure: true, sameSite: "none", partitioned: true, path: "/", expires });
 }
 
 export async function endUserSession(everywhere = false) {
@@ -59,7 +59,7 @@ export async function endUserSession(everywhere = false) {
       else await userSessions(db).deleteOne({ _id: s._id });
     });
   }
-  deleteCookie(USER_COOKIE, { path: "/" });
+  deleteCookie(USER_COOKIE, { path: "/", secure: true, sameSite: "none", partitioned: true });
 }
 
 /** Signed-in reader from the session cookie, or null. Expiry is checked on every request; activity slides it forward. */
@@ -76,7 +76,7 @@ export async function currentUser(): Promise<SessionUser | null> {
     if (Date.now() - s.lastSeenAt.getTime() > 3_600_000) {
       const expires = new Date(Date.now() + idleMs());
       await userSessions(db).updateOne({ _id: s._id }, { $set: { lastSeenAt: new Date(), expiresAt: expires } });
-      setCookie(USER_COOKIE, token, { httpOnly: true, secure: true, sameSite: "lax", path: "/", expires });
+      setCookie(USER_COOKIE, token, { httpOnly: true, secure: true, sameSite: "none", partitioned: true, path: "/", expires });
     }
     return { id: u._id, email: await decrypt(u.emailEnc), username: u.username };
   });

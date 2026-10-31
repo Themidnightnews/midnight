@@ -1,7 +1,24 @@
 import { recordPageView } from "@/lib/page-views.functions";
 
-/** GA4 measurement ID. Set VITE_GA_MEASUREMENT_ID (e.g. in Vercel → Settings → Environment Variables). */
-export const GA_ID: string | undefined = import.meta.env["VITE_GA_MEASUREMENT_ID"] || undefined;
+let gaInstalled = false;
+/** Loads gtag.js once in the browser (call from useEffect). Page views are sent by trackPageView. */
+export function installGoogleAnalytics(id: string) {
+  if (typeof window === "undefined" || gaInstalled) return;
+  gaInstalled = true;
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
+  document.head.appendChild(s);
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function gtag() {
+    // eslint-disable-next-line prefer-rest-params -- gtag.js needs the Arguments object
+    window.dataLayer!.push(arguments);
+  };
+  window.gtag("js", new Date());
+  window.gtag("config", id, { send_page_view: false });
+  const path = location.pathname;
+  if (!path.startsWith("/admin")) window.gtag("event", "page_view", { page_path: path, page_location: location.href, page_title: document.title });
+}
 
 declare global {
   interface Window { dataLayer?: unknown[]; gtag?: (...args: unknown[]) => void }
@@ -33,5 +50,5 @@ export function trackPageView(path: string) {
     path: path.slice(0, 500), articleSlug: slug ? decodeURIComponent(slug).slice(0, 300) : null,
     referrer, visitorId: visitorId(), device: device(),
   } }).catch(() => {});
-  if (GA_ID && window.gtag) window.gtag("event", "page_view", { page_path: path, page_location: location.href, page_title: document.title });
+  if (window.gtag) window.gtag("event", "page_view", { page_path: path, page_location: location.href, page_title: document.title });
 }

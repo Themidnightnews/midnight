@@ -19,7 +19,7 @@ import {
   adminSetMemberBlocked, adminDeleteMember, adminSecurity, adminUpdateSettings, adminRevokeSession,
   adminListTeam, adminActivityLog, adminReaderActivity, adminCreateEditor, adminUpdateTeamMember, adminUpdateMyAccount,
 } from "@/lib/admin.functions";
-import { GA_ID } from "@/lib/site-tracking";
+import { gaIdQuery } from "@/lib/analytics.functions";
 import { matchesQuery, withinDays } from "@/lib/admin-filters";
 
 export const Route = createFileRoute("/admin")({
@@ -337,6 +337,7 @@ function Analytics() {
   const s = q.data;
   const t = useQuery({ queryKey: ["admin", "totals"], queryFn: () => adminCommunityTotals() });
   const tt = t.data;
+  const GA_ID = useQuery(gaIdQuery).data?.gaId;
   return (
     <>
       <H sub={GA_ID ? `Google Analytics is also collecting (${GA_ID}).` : "Google Analytics turns on once a measurement ID is added."}

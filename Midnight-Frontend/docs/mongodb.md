@@ -21,7 +21,7 @@ After deploying the existing images to permanent HTTPS URLs, export with `MONGOD
 ## Connection prerequisite
 MongoDB Atlas database access normally requires a **connection URI with database-user credentials**, plus a database name and permitted network access. An Atlas Administration API key manages Atlas resources; it is not a substitute for database credentials. If the future key belongs to an HTTP gateway, its service and HTTPS URL must be identified first.
 
-Atlas Data API / App Services reached end of life September 30, 2025; do not build against it. Cloudflare now documents a MongoDB driver approach, but it must be validated in this project's deployed runtime before adoption. A documented, authorized HTTPS gateway is another option, not an assumed existing service. Credentials must be supplied later using the secure secret form, never pasted into chat or included in browser code. Activate Lovable Cloud before adding runtime server functionality; MongoDB remains the requested editorial store.
+Atlas Data API / App Services reached end of life September 30, 2025; do not build against it. Cloudflare now documents a MongoDB driver approach, but it must be validated in this project's deployed runtime before adoption. A documented, authorized HTTPS gateway is another option, not an assumed existing service. Credentials must be supplied later using the secure secret form, never pasted into chat or included in browser code. Activate a separate backend before adding runtime server functionality; MongoDB remains the requested editorial store.
 
 References:
 - https://developers.cloudflare.com/workers/databases/third-party-integrations/mongodb/

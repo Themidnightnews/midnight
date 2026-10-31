@@ -1,3 +1,8 @@
+# Header updates (Oct 31)
+- [x] Compact header: signed-in profile only; signed-out Report (account-state tests pass; live signed-in session unavailable).
+- [x] Small screens: mirrored hamburger, no ticker, centre search fills available width.
+- [x] Dropdown: separately scrolling categories with always-visible padded sign-up and Report actions.
+
 # Category access (Oct 30)
 - [x] Include every category in More categories and the small-screen hamburger menu, including scrolling-header categories.
 
@@ -17,7 +22,7 @@
 - [x] sitemap.xml with all pages, sections and articles.
 - [x] Structured data, share tags, article interlinking.
 - [x] Emails use @themidnightnews.com everywhere.
-- [ ] Google Analytics: waiting on GA4 Measurement ID from user.
+- [x] Google Analytics (GA4) + Vercel Analytics added.
 - [x] Confirm earlier requests (hero animation, stars, admin/user activity, batched admin loading) are done.
 
 # Admin follow-ups (Oct 28, 08:39)
@@ -48,7 +53,7 @@
 - [x] All inputs/search/textareas visibly styled; brand focus ring, never black.
 - [x] Admin cards, buttons, hovers, story rows match the site's premium look (photo + glow cards).
 
-# Move into new Lovable project (Oct 28, 07:32)
+# Move into new project (Oct 28, 07:32)
 - [x] Copy code, recreate tables, email sign-in, reconnect MongoDB, default admin.
 - [ ] Import existing users and relink their comments/likes/saves (waits on user export).
 - [ ] Import old page views / audit log (waits on export or skip).
@@ -73,7 +78,7 @@
 - [x] Missing images show one of ~20 fixed gradients (picked per image), never alt/placeholder text.
 - [x] Premium custom scrollbars (page, discussion, any scroll area) in brand colours.
 - [x] Whole site responsive at every width: no sideways overflow, nothing cramped or broken.
-- [x] Remove social sign-in (Google, Lovable); email + password only.
+- [x] Remove social sign-in (Google and others); email + password only.
 - [x] Removed forgot password and confirmation emails (user's choice); sign-up is instant, max 3 accounts per network per day.
 - [x] Make sure user information stored in MongoDB is encrypted.
 - [x] Article Like/Save/Share/Discuss: one line always; drop text labels (icons only) when they don't fit.

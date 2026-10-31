@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PageLock } from "@/components/page-lock";
 import { AccountButton } from "@/components/account-button";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Search, X } from "lucide-react";
@@ -6,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { MidnightLogo } from "@/components/news-bits";
 import { searchArticles } from "@/data/news";
 import { searchTrends } from "@/data/trends";
+import { useAuth } from "@/hooks/use-auth";
 
 /** Minimal header for article, report and resource pages: logo · centred search · report. */
 export function CompactHeader() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -43,6 +46,7 @@ export function CompactHeader() {
 
   return (
     <>
+      <PageLock active={open && !!q} onClose={() => setOpen(false)} />
       <div aria-hidden className="header-haze pointer-events-none fixed inset-x-0 top-0 z-40 h-28" />
       <header className="fixed inset-x-0 top-4 z-50 mx-auto max-w-7xl px-4">
         <nav className="glass grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-full py-2.5 pr-2.5 pl-4 sm:grid-cols-[1fr_minmax(0,28rem)_1fr] sm:pl-6">
@@ -72,10 +76,11 @@ export function CompactHeader() {
           </div>
 
           <div className="flex items-center gap-1 justify-self-end md:gap-4 lg:gap-5 xl:gap-6">
-            <AccountButton compact />
-            <Button asChild className="h-11 rounded-full px-4 font-bold sm:px-6">
-              <Link to="/midnight-report">The Report</Link>
-            </Button>
+            {user ? <AccountButton compact /> : (
+              <Button asChild className="h-11 rounded-full px-4 font-bold sm:px-6">
+                <Link to="/midnight-report">The Report</Link>
+              </Button>
+            )}
           </div>
         </nav>
             {open && q && (

@@ -34,7 +34,7 @@ export function SelectMenu<T extends string | number | null>({ prefix, value, op
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value) ?? options[0];
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root modal open={open} onOpenChange={setOpen}>
       <Trigger prefix={prefix} value={current?.label ?? ""} icon={icon} />
       <Popover.Portal>
         <Popover.Content align={align} sideOffset={8} collisionPadding={12} className="admin-menu" onKeyDown={onMenuKeys}
@@ -74,7 +74,7 @@ export function DaysPicker({ value, onChange, allowAll = false, max = MAX_DAYS, 
   const presets: (number | null)[] = [...(allowAll ? [null] : []), ...DAY_PRESETS.filter((d) => d <= max)];
   const isCustom = value != null && !presets.includes(value);
   return (
-    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
+    <Popover.Root modal open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
       <Trigger prefix={prefix} value={daysLabel(value)} icon={<CalendarRange className="h-4 w-4 shrink-0 text-muted-foreground" />} />
       <Popover.Portal>
         <Popover.Content align={align} sideOffset={8} collisionPadding={12} className="admin-menu" onKeyDown={onMenuKeys}

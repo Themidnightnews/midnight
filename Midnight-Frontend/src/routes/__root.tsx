@@ -25,11 +25,12 @@ import { setCatalogue } from "@/data/news";
 import { setTrends } from "@/data/trends";
 import { trendsQuery } from "@/lib/trends.functions";
 import { DataUnavailable } from "@/components/data-unavailable";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { installImageFallback } from "@/lib/image-fallback";
 import { useQuery } from "@tanstack/react-query";
 import { getSiteStatus } from "@/lib/admin.functions";
-import { GA_ID, trackPageView } from "@/lib/site-tracking";
+import { installGoogleAnalytics, trackPageView } from "@/lib/site-tracking";
+import { gaIdQuery } from "@/lib/analytics.functions";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 
 function NotFoundComponent() {
   return (
@@ -54,10 +55,9 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error(error);
   }, [error]);
 
   return (
@@ -113,18 +113,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
-    // Standard Google tag (gtag.js); page views are sent on every route change by trackPageView.
+    // Google tag (gtag.js) is loaded in RootComponent once the measurement ID arrives from the server.
     scripts: [
       { type: "application/ld+json", children: JSON.stringify([
         { "@context": "https://schema.org", "@type": "NewsMediaOrganization", name: SITE_NAME, url: absUrl("/"), email: CONTACT_EMAIL },
         { "@context": "https://schema.org", "@type": "WebSite", name: SITE_NAME, url: absUrl("/"), potentialAction: { "@type": "SearchAction", target: `${absUrl("/search")}?q={search_term_string}`, "query-input": "required name=search_term_string" } },
       ]) },
-      ...(GA_ID
-      ? [
-          { src: `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`, async: true },
-          { children: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_ID}',{send_page_view:false});` },
-        ]
-      : []),
     ],
   }),
   beforeLoad: async ({ context, location }) => {
@@ -165,12 +159,14 @@ function RootComponent() {
   if (trendData) setTrends(trendData.trends);
   const fullHeader = pathname === "/" || pathname.startsWith("/section/");
   useEffect(() => trackPageView(pathname), [pathname]);
+  const { data: ga } = useQuery(gaIdQuery, queryClient);
+  useEffect(() => { if (ga?.gaId) installGoogleAnalytics(ga.gaId); }, [ga?.gaId]);
   const { data: site } = useQuery({ queryKey: ["site-status"], queryFn: () => getSiteStatus(), staleTime: 60_000 }, queryClient);
   if (pathname.startsWith("/admin")) {
     return (
       <QueryClientProvider client={queryClient}>
         <Outlet />
-        <Toaster position="bottom-center" />
+        <Toaster position="top-center" className="toaster-center" />
       </QueryClientProvider>
     );
   }
@@ -196,7 +192,8 @@ function RootComponent() {
           ) : catalogue.unavailable && needsStories ? <main className="flex flex-1 items-center px-4 pt-28 pb-24"><DataUnavailable /></main> : <Outlet />}
           <SiteFooter />
         </div>
-        <Toaster position="bottom-center" />
+        <Toaster position="top-center" className="toaster-center" />
+        <VercelAnalytics />
       </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
