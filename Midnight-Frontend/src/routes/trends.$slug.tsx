@@ -119,7 +119,7 @@ function TrendView({ t, bodyUnavailable }: { t: Trend; bodyUnavailable: boolean 
             )) : (
               <ul className="space-y-4">
                 {t.summary.map((p, i) => (
-                  <li key={i} className="flex gap-3"><span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />{p}</li>
+                  <li key={i} className="flex gap-3"><span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" />{p}</li>
                 ))}
               </ul>
             )}
