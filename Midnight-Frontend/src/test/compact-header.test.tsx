@@ -9,6 +9,7 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) => <a {...props} href={to} onClick={(event) => { event.preventDefault(); state.navigate(to); }}>{children}</a>,
 }));
 vi.mock("@/components/account-button", () => ({
+  UserAvatar: () => <span />,
   AccountButton: () => <a aria-label="Your account" href="/profile" onClick={(event) => { event.preventDefault(); state.navigate("/profile"); }}>Account</a>,
 }));
 vi.mock("@/components/news-bits", () => ({ MidnightLogo: () => <span /> }));
@@ -30,5 +31,23 @@ describe("compact header account destination", () => {
     fireEvent.click(screen.getByRole("link", { name: "The Report" }));
     expect(state.navigate).toHaveBeenCalledWith("/midnight-report");
     expect(document.querySelector('a[href="/profile"]')).toBeNull();
+  });
+
+  it("signed-out menu offers sign in (no sign up) and the Report", () => {
+    render(<CompactHeader />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open menu" }), { key: "Enter" });
+    expect(screen.getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sign up" })).toBeNull();
+    expect(document.querySelectorAll('a[href="/midnight-report"]').length).toBe(2);
+  });
+
+  it("signed-in menu shows the reader's profile summary instead of sign in", () => {
+    state.user = { id: "reader", email: "reader@example.com", username: "nightowl" };
+    render(<CompactHeader />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open menu" }), { key: "Enter" });
+    expect(screen.getByText("nightowl")).toBeInTheDocument();
+    expect(screen.getByText("reader@example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /Your profile/ })).toBeInTheDocument();
   });
 });

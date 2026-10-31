@@ -1,3 +1,19 @@
+# Filter strips and credentials (Oct 31, 11:10)
+- [x] Open the secure form for the existing MongoDB and admin credentials.
+- [x] Keep both article and trending filter strips inset equally while scrolling.
+- [x] Add independent typed calendar-date filters to articles and trends, preserving the existing style.
+- [ ] Run date-filter tests and check the available page states (paused: workspace credits exhausted).
+
+# Second header menu + dark-mode borders (Oct 31, 10:40)
+- [x] Compact-header menu: light/dark switch plus Sign in/Sign up when signed out, or profile summary when signed in.
+- [x] Small screens: Report button moves from the compact header into that menu.
+- [x] Compact-header hamburger matches header one (size and style).
+- [x] Dark mode, small screens only: subtler gradient border on both search bars and the article jump arrow.
+
+# Migration into this project (Oct 31, 10:35)
+- [x] Copy code, keep MongoDB, recreate icons, reconnect MONGODB_URI + COMMUNITY_ENCRYPTION_KEY; stories load; 66/66 tests pass.
+- [ ] Verify reader sign-up/sign-in and /admin against MongoDB (blocked: test network hit the 3-accounts-per-day sign-up limit; needs a real reader or admin sign-in).
+
 # Oct 31, 09:35
 - [ ] Verify reader sign-up/sign-in.
 - [x] Admin logo visible in dark mode.

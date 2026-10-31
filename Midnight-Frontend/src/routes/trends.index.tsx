@@ -6,6 +6,8 @@ import type * as React from "react";
 import { z } from "zod";
 import { ArrowUpRight, ChevronDown, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PublicationDatePicker } from "@/components/publication-date-filter";
+import { emptyPublicationDate, filterByPublicationDate, hasPublicationDate } from "@/lib/publication-date";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TrendBigCard, TrendThumbRow } from "@/components/trend-cards";
 import { searchTrends, setTrends, sortTrends, trendHashtags, trends, trendsInHashtag, type Trend } from "@/data/trends";
@@ -42,13 +44,14 @@ function TrendsPage() {
   const { tag, q } = Route.useSearch();
   const navigate = useNavigate({ from: "/trends/" });
   const [sort, setSort] = useState<SectionSort>("latest");
+  const [date, setDate] = useState(emptyPublicationDate);
   const tagsMenu = useHoverMenu();
   const hashtags = trendHashtags();
   const active = tag && hashtags.some((h) => h.toLowerCase() === tag.toLowerCase()) ? tag : undefined;
 
   let list: Trend[] = active ? trendsInHashtag(active) : [...trends];
   if (q?.trim()) list = searchTrends(q).filter((t) => !active || list.includes(t));
-  list = sortTrends(list, sort);
+  list = sortTrends(filterByPublicationDate(list, date), sort);
   const [top, ...rest] = list;
 
   const setTag = (value?: string) => navigate({ search: (prev) => ({ ...prev, tag: value }) });
@@ -63,7 +66,7 @@ function TrendsPage() {
           <p className="mt-2 min-w-0 text-sm text-muted-foreground md:text-base">Here's what's going viral and trending around the world right now.</p>
           {q?.trim() && <p className="mt-2 text-sm font-semibold">{list.length} {list.length === 1 ? "trend" : "trends"} matching “{q.trim()}”</p>}
         </div>
-        <div className="pill-scroll -mx-6 min-w-0 overflow-x-auto px-6 md:-mx-8 md:px-8 lg:mx-0 lg:px-0">
+        <div className="pill-scroll pill-scroll-curved min-w-0 overflow-x-auto py-1 lg:max-w-xl">
           <div className="flex w-max items-center gap-2">
             <DropdownMenu modal={false} open={tagsMenu.open} onOpenChange={tagsMenu.onOpenChange}>
               <DropdownMenuTrigger {...tagsMenu.trigger} className="pill-filter flex shrink-0 items-center gap-1.5 h-9 rounded-full px-4 text-sm font-bold whitespace-nowrap">
@@ -82,9 +85,10 @@ function TrendsPage() {
             </DropdownMenu>
             <div role="group" aria-label="Sort trends" className="flex w-max items-center gap-1.5 rounded-full border border-navigation-border bg-navigation-highlight p-1 shadow-glass">
               {SORTS.map(([value, label]) => (
-                <button key={value} type="button" aria-pressed={sort === value} onClick={() => setSort(value)} className={`shrink-0 rounded-full px-4 py-2 text-sm whitespace-nowrap transition ${sort === value ? "bg-primary font-bold text-primary-foreground shadow-float" : "pill-soft font-medium text-foreground/80 hover:text-foreground"}`}>{label}</button>
+                <Button variant="ghost" key={value} type="button" aria-pressed={sort === value} onClick={() => setSort(value)} className={`h-9 shrink-0 rounded-full px-4 py-2 text-sm whitespace-nowrap transition ${sort === value ? "bg-primary font-bold text-primary-foreground shadow-float" : "pill-soft font-medium text-foreground/80 hover:text-foreground"}`}>{label}</Button>
               ))}
             </div>
+            <PublicationDatePicker value={date} onChange={setDate} subject="trends" />
           </div>
         </div>
       </header>
@@ -102,14 +106,15 @@ function TrendsPage() {
               ))}
             </div>
           </div>
-          {rest.length > 6 && <MoreTrends key={`${active ?? "all"}-${q ?? ""}-${sort}`} items={rest.slice(6)} />}
+          {rest.length > 6 && <MoreTrends key={`${active ?? "all"}-${q ?? ""}-${sort}-${date.day}-${date.month}-${date.year}`} items={rest.slice(6)} />}
         </div>
       ) : (
         <section className="mt-8">
           <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-lg border bg-card p-8 text-center">
             <Flame className="h-8 w-8 text-muted-foreground" />
-            <h2 className="text-xl font-extrabold">{q?.trim() || active ? "No trends match that filter" : "No trends yet"}</h2>
-            <p className="max-w-md text-muted-foreground">{q?.trim() || active ? "Try a different hashtag or search." : "When something starts going viral around the world, you'll find it here."}</p>
+            <h2 className="text-xl font-extrabold">{hasPublicationDate(date) || q?.trim() || active ? "No trends match that filter" : "No trends yet"}</h2>
+            <p className="max-w-md text-muted-foreground">{hasPublicationDate(date) || q?.trim() || active ? "Try a different date, hashtag or search." : "When something starts going viral around the world, you'll find it here."}</p>
+            {hasPublicationDate(date) && <Button variant="secondary" onClick={() => setDate(emptyPublicationDate)}>Clear date filter</Button>}
             {(q?.trim() || active) && <Button asChild variant="secondary"><Link to="/trends" search={{}}>See all trends <ArrowUpRight /></Link></Button>}
           </div>
         </section>

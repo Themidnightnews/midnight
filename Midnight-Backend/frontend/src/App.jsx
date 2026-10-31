@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, ChevronsLeft, ChevronsRight, FileText, Globe, KeyRound, Menu, Newspaper, TrendingUp, X } from "lucide-react";
 import { ColorGlow } from "./components/ui.jsx";
+import { useThemeMode } from "./components/theme.jsx";
 import Live from "./pages/Live.jsx";
 import Articles from "./pages/Articles.jsx";
 import Reports from "./pages/Reports.jsx";
@@ -22,6 +23,7 @@ const readTab = () => (TABS.find((t) => t.id === window.location.hash.slice(1)) 
 export default function App() {
   const [tab, setTab] = useState(readTab);
   const [drawer, setDrawer] = useState(false);
+  const theme = useThemeMode();
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("dash-collapsed") === "1"; } catch { return false; } });
   useEffect(() => { const f = () => setTab(readTab()); window.addEventListener("hashchange", f); return () => window.removeEventListener("hashchange", f); }, []);
   const go = (id) => { window.location.hash = id; setDrawer(false); };
@@ -32,7 +34,7 @@ export default function App() {
   const nav = (rail) => (
     <>
       <div className="mb-5 flex min-w-0 items-center gap-3 px-1">
-        <span className="avatar-orb h-10 w-10 shrink-0 text-sm" style={{ background: "var(--primary)" }}>
+        <span className="avatar-orb h-10 w-10 shrink-0 text-sm" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14.5 2.5a9.5 9.5 0 1 0 7 15.9A8 8 0 0 1 14.5 2.5Z" /></svg>
         </span>
         <div className="admin-label min-w-0">
@@ -48,13 +50,16 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {rail && (
-        <div className="mt-3 border-t border-border/60 pt-3">
+      <div className="mt-3 space-y-1 border-t border-border/60 pt-3">
+        <button type="button" className="admin-tab" data-tip={rail ? theme.label : undefined} aria-label={theme.label} onClick={theme.toggle}>
+          <theme.Icon /><span className="admin-label">{theme.label}</span>
+        </button>
+        {rail && (
           <button type="button" className="admin-tab hidden lg:flex" aria-label={collapsed ? "Expand menu" : "Collapse menu"} onClick={toggle}>
             {collapsed ? <ChevronsRight /> : <ChevronsLeft />}<span className="admin-label">Collapse menu</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 
@@ -64,7 +69,7 @@ export default function App() {
       <header className="admin-topbar glass-strong shadow-float">
         <button type="button" className="admin-icon-btn" aria-label="Open menu" onClick={() => setDrawer(true)}><Menu className="h-5 w-5" /></button>
         <p className="truncate text-center font-serif text-lg">{current.label}</p>
-        <span className="h-10 w-10" />
+        <button type="button" className="admin-icon-btn" aria-label={theme.label} onClick={theme.toggle}><theme.Icon className="h-5 w-5" /></button>
       </header>
       {drawer && (
         <>

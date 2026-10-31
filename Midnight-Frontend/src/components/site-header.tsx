@@ -1,4 +1,5 @@
-import { ThemeMenuItem, ThemeMenuRow, ThemeHeaderButton } from "@/components/theme-toggle";
+import { ThemeMenuRow, ThemeHeaderButton } from "@/components/theme-toggle";
+import { PremiumMenuIcon } from "@/components/premium-menu-icon";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PageLock } from "@/components/page-lock";
 import { useHoverMenu } from "@/hooks/use-hover-menu";
@@ -33,16 +34,6 @@ const configs: Cfg[] = [
 ];
 const MIN_STRIP = 90;
 
-// Premium hamburger: three rounded lines of decreasing length (top longest).
-function PremiumMenuIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden className={className}>
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="9" y1="12" x2="21" y2="12" />
-      <line x1="15" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
 
 const slugOf = (name: string) => slugify(name);
 
@@ -66,7 +57,6 @@ function MoreCategories() {
             <Link to="/section/$slug" params={{ slug: c.slug }}>{c.name}</Link>
           </DropdownMenuItem>
         ))}
-        <div className="col-span-2 mt-1 border-t border-navigation-border pt-1"><ThemeMenuItem /></div>
       </DropdownMenuContent>
     </DropdownMenu>
     </>
@@ -220,7 +210,8 @@ export function SiteHeader() {
               <span className="truncate">Search Midnight…</span>
             </Button>
           )}
-          <ThemeHeaderButton className={`hidden sm:grid ${cfg.more ? "lg:hidden" : ""}`} />
+          {/* Only on the header when the menu button is gone; otherwise it lives inside the menu. */}
+          {!needsBurger && <ThemeHeaderButton className="hidden lg:grid" />}
           {cfg.signIn && <div className="hidden md:block"><AccountButton /></div>}
           {cfg.report && (
             <Button asChild className="hidden h-11 rounded-full px-6 font-bold md:inline-flex"><Link to="/midnight-report">The Report</Link></Button>

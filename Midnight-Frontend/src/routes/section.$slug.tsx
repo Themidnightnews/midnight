@@ -3,6 +3,8 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { BigCard, ThumbRow } from "@/components/cards";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PublicationDatePicker } from "@/components/publication-date-filter";
+import { emptyPublicationDate, filterByPublicationDate, hasPublicationDate } from "@/lib/publication-date";
 
 const SORTS = [["latest", "Latest"], ["oldest", "Oldest"], ["popular", "Popular"], ["trending", "Trending"]] as const;
 import { ArrowUpRight, Newspaper } from "lucide-react";
@@ -43,8 +45,9 @@ export const Route = createFileRoute("/section/$slug")({
 function SectionPage() {
   const { section } = Route.useLoaderData();
   const [sort, setSort] = useState<SectionSort>("latest");
+  const [date, setDate] = useState(emptyPublicationDate);
   const all = articlesInSection(section.slug);
-  const list = sortSectionArticles(all, sort);
+  const list = sortSectionArticles(filterByPublicationDate(all, date), sort);
   const [top, ...rest] = list;
 
   return (
@@ -54,11 +57,14 @@ function SectionPage() {
           <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">{section.name}</h1>
           <p className="mt-2 min-w-0 text-sm text-muted-foreground md:text-base">{section.desc}</p>
         </div>
-        <div className="pill-scroll -mx-6 min-w-0 overflow-x-auto px-6 md:-mx-8 md:px-8 lg:mx-0 lg:px-0">
+        <div className="pill-scroll pill-scroll-curved min-w-0 overflow-x-auto py-1 lg:max-w-xl">
+          <div className="flex w-max items-center gap-2">
           <div role="group" aria-label="Sort stories" className="flex w-max items-center gap-1.5 rounded-full border border-navigation-border bg-navigation-highlight p-1 shadow-glass">
             {SORTS.map(([value, label]) => (
-              <button key={value} type="button" aria-pressed={sort === value} onClick={() => setSort(value)} className={`shrink-0 rounded-full px-4 py-2 text-sm whitespace-nowrap transition ${sort === value ? 'bg-primary font-bold text-primary-foreground shadow-float' : 'pill-soft font-medium text-foreground/80 hover:text-foreground'}`}>{label}</button>
+              <Button variant="ghost" key={value} type="button" aria-pressed={sort === value} onClick={() => setSort(value)} className={`h-9 shrink-0 rounded-full px-4 py-2 text-sm whitespace-nowrap transition ${sort === value ? 'bg-primary font-bold text-primary-foreground shadow-float' : 'pill-soft font-medium text-foreground/80 hover:text-foreground'}`}>{label}</Button>
             ))}
+          </div>
+          <PublicationDatePicker value={date} onChange={setDate} subject="stories" />
           </div>
         </div>
       </header>
@@ -76,14 +82,15 @@ function SectionPage() {
               ))}
             </div>
           </div>
-          {rest.length > 6 && <MoreStories key={`${section.slug}-${sort}`} items={rest.slice(6)} />}
+          {rest.length > 6 && <MoreStories key={`${section.slug}-${sort}-${date.day}-${date.month}-${date.year}`} items={rest.slice(6)} />}
         </div>
       ) : (
         <section className="mt-8">
           <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-lg border bg-card p-8 text-center">
             <Newspaper className="h-8 w-8 text-muted-foreground" />
-            <h2 className="text-xl font-extrabold">{all.length ? 'No ranked stories yet' : section.slug === 'opinion' ? 'No opinions in this section yet' : 'No news articles in this category yet'}</h2>
-            <p className="max-w-md text-muted-foreground">{all.length ? (sort === 'popular' ? 'Readership counts are not available for this section yet.' : 'Readership counts are not available for this section yet.') : "We don’t have any news covering this category yet."}</p>
+            <h2 className="text-xl font-extrabold">{hasPublicationDate(date) ? 'No stories match that date' : all.length ? 'No ranked stories yet' : section.slug === 'opinion' ? 'No opinions in this section yet' : 'No news articles in this category yet'}</h2>
+            <p className="max-w-md text-muted-foreground">{hasPublicationDate(date) ? 'Try another publication date.' : all.length ? 'Readership counts are not available for this section yet.' : "We don’t have any news covering this category yet."}</p>
+            {hasPublicationDate(date) && <Button variant="secondary" onClick={() => setDate(emptyPublicationDate)}>Clear date filter</Button>}
             <Button asChild variant="secondary"><Link to="/explore">Explore other sections <ArrowUpRight /></Link></Button>
           </div>
         </section>

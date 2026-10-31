@@ -41,11 +41,13 @@ function Index() {
 
       {/* Ticker */}
       <div className="mx-auto max-w-7xl px-4 pt-28">
-        <div className="glass flex items-center gap-4 overflow-hidden rounded-full py-2 pl-2">
-          <span className="live-badge flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold tracking-wider uppercase">
+        <div className="glass flex items-center overflow-hidden rounded-full px-4 py-2">
+          <span className="live-badge relative z-10 flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold tracking-wider uppercase">
             <span className="h-2 w-2 animate-pulse rounded-full bg-live" /> Live
           </span>
-          <div className="min-w-0 flex-1 overflow-hidden">
+          {/* No flex gap: the ticker's ")"-shaped mask (1rem, same as the strip's px-4) is the only space between the Live badge and where headlines vanish, so it equals the strip-edge-to-badge gap. */}
+          <div className="ticker-window min-w-0 flex-1 overflow-hidden rounded-r-full py-1.5 pr-3">
+
             <div className="animate-ticker flex w-max gap-10 text-sm font-medium whitespace-nowrap">
               {tickerStories.length === 0 && <span className="text-muted-foreground">No live updates yet.</span>}
               {[...tickerStories, ...tickerStories].map((a, i) => (

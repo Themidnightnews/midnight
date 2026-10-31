@@ -16,7 +16,7 @@ export function ReportDatePicker({ value, dates, onChange }: { value: string; da
   const canHover = useRef(false);
   const all = dates;
   const matches = useMemo(() => filterReportDates(all, { day, month, year }), [all, day, month, year]);
-  const field = "search-field h-10 w-full rounded-full bg-transparent px-3 text-center text-sm outline-hidden placeholder:text-muted-foreground";
+  const field = "search-field h-11 w-full rounded-full bg-transparent px-3 text-center text-base outline-hidden placeholder:text-muted-foreground sm:h-12 sm:px-3 sm:text-base md:h-14 md:px-4 md:text-lg";
   const reset = (fn: (v: string) => void) => (v: string) => { fn(v.replace(/\D/g, "")); setShown(PAGE); };
 
   // Hover-to-open only on pointer devices; touch taps keep the plain click toggle.
@@ -48,29 +48,29 @@ export function ReportDatePicker({ value, dates, onChange }: { value: string; da
       <PopoverContent
         align="center"
         sideOffset={10}
-        className="glass-strong w-80 rounded-2xl border-0 p-2"
+        className="glass-strong w-[min(24rem,calc(100vw-2rem))] rounded-2xl border-0 p-2 sm:w-[26rem] sm:p-3 md:w-[30rem] md:p-4"
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
       >
-        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 p-1">
+        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 p-1 sm:gap-3 sm:p-2 md:gap-4">
           <input aria-label="Day" placeholder="DD" maxLength={2} inputMode="numeric" value={day} onChange={(e) => reset(setDay)(e.target.value)} className={field} />
           <input aria-label="Month" placeholder="MM" maxLength={2} inputMode="numeric" value={month} onChange={(e) => reset(setMonth)(e.target.value)} className={field} />
           <input aria-label="Year" placeholder="YYYY" maxLength={4} inputMode="numeric" value={year} onChange={(e) => reset(setYear)(e.target.value)} className={field} />
         </div>
         <ul
-          className="mt-1 max-h-72 overflow-y-auto overscroll-contain"
+          className="mt-1 max-h-64 overflow-y-auto overscroll-contain sm:mt-2 sm:max-h-96 md:max-h-[28rem]"
           onScroll={(e) => {
             const el = e.currentTarget;
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) setShown((n) => Math.min(n + PAGE, matches.length));
           }}
         >
-          {matches.length === 0 && <li className="px-3 py-3 text-sm text-muted-foreground">No reports on that date.</li>}
+          {matches.length === 0 && <li className="px-3 py-3 text-base text-muted-foreground sm:text-sm">No reports on that date.</li>}
           {matches.slice(0, shown).map((iso) => (
             <li key={iso}>
               <button
                 onClick={() => { onChange(iso); setOpen(false); }}
                 data-active={iso === value || undefined}
-                className="nav-hover w-full rounded-xl px-3 py-2 text-left text-sm font-medium data-[active]:bg-navigation-highlight data-[active]:font-bold"
+                className="nav-hover w-full rounded-xl px-3 py-2.5 text-left text-base font-medium data-[active]:bg-navigation-highlight data-[active]:font-bold sm:py-2 sm:text-base"
               >
                 {formatReportDate(iso)}
               </button>
