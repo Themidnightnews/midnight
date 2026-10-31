@@ -1,3 +1,33 @@
+# Oct 31, 09:35
+- [ ] Verify reader sign-up/sign-in.
+- [x] Admin logo visible in dark mode.
+- [x] Hover menus no longer flicker/close.
+- [x] Show light/dark toggle on header when the More categories menu is hidden.
+
+# Finish outstanding requests (Oct 31, 09:17)
+- [ ] Verify reader signup/signin and admin signin with real sessions; remove verification data.
+- [ ] Remove theme-check-tmp admin and leftover scratch files.
+- [ ] Verify small-screen layouts, search, both themes and smaller search icons.
+- [ ] Resolve the three failing story-rule checks without fabricating or altering editorial data.
+- [ ] Request publishing after security check; connect themidnightnews.com (domain confirmation required).
+
+# Move into this Lovable project (Oct 31, 08:28)
+- [x] Copy site code from archive, keep MongoDB (user's choice), recreate missing icons.
+- [x] Reconnect MongoDB (MONGODB_URI, COMMUNITY_ENCRYPTION_KEY) and check stories load.
+- [ ] Verify sign-up/sign-in and /admin against MongoDB.
+
+# Theme sweep (Oct 31, 08:32)
+- [ ] Open every page, pop-up, confirmation dialog and toast in dark mode; fix anything off-theme or with invisible text (also re-check light).
+
+# Header toggle (Oct 31)
+- [x] Show light/dark toggle on the header itself on large screens (menus on small).
+- [x] Online preview loads stories (database works when hosted).
+
+# Dark mode + favicon (Oct 31)
+- [x] Dark mode is true dark (not blue) across all screens, cards, tabs; keep premium style; light mode untouched.
+- [x] Move light/dark toggle into the menu dropdown, off the header.
+- [x] Favicon + Google-discoverable icon from our logo.
+
 # Header updates (Oct 31)
 - [x] Compact header: signed-in profile only; signed-out Report (account-state tests pass; live signed-in session unavailable).
 - [x] Small screens: mirrored hamburger, no ticker, centre search fills available width.

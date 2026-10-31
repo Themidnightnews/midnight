@@ -41,7 +41,7 @@ function SearchPage() {
           navigate({ to: "/search", search: { q: value.trim() || undefined } });
         }}
       >
-        <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Search headlines, topics, sections…" className="min-w-0 flex-1 bg-transparent py-2 outline-hidden placeholder:text-muted-foreground" />
         <button className="shrink-0 rounded-full bg-primary px-6 py-3 font-bold text-primary-foreground">Search</button>
       </form>

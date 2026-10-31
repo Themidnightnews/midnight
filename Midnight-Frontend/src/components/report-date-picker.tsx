@@ -25,17 +25,22 @@ export function ReportDatePicker({ value, dates, onChange }: { value: string; da
     return () => { if (closeTimer.current !== null) clearTimeout(closeTimer.current); };
   }, []);
 
+  const inside = useRef(false);
   const cancelClose = () => { if (closeTimer.current !== null) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
-  const scheduleClose = () => { cancelClose(); closeTimer.current = window.setTimeout(() => setOpen(false), 180); };
-  const onEnter = () => { if (!canHover.current) return; cancelClose(); setOpen(true); };
-  const onLeave = () => { if (!canHover.current) return; scheduleClose(); };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = window.setTimeout(() => { if (!inside.current) setOpen(false); }, 200); };
+  const onEnter = () => { if (!canHover.current) return; inside.current = true; cancelClose(); setOpen(true); };
+  const onLeave = () => { if (!canHover.current) return; inside.current = false; scheduleClose(); };
+  // Ignore close requests while the mouse is over the button or pop-up (stops flicker).
+  const onOpenChange = (next: boolean) => { if (!next && inside.current) return; setOpen(next); };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
         className="pill-glass mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold"
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
+        onPointerDown={(e) => { if (e.pointerType === "mouse" && open) e.preventDefault(); }}
+        onClick={(e) => { if (canHover.current && open) e.preventDefault(); }}
       >
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
         <time dateTime={value}>{formatReportDate(value)}</time>
@@ -44,8 +49,8 @@ export function ReportDatePicker({ value, dates, onChange }: { value: string; da
         align="center"
         sideOffset={10}
         className="glass-strong w-80 rounded-2xl border-0 p-2"
-        onMouseEnter={cancelClose}
-        onMouseLeave={scheduleClose}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
       >
         <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 p-1">
           <input aria-label="Day" placeholder="DD" maxLength={2} inputMode="numeric" value={day} onChange={(e) => reset(setDay)(e.target.value)} className={field} />

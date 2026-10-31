@@ -244,6 +244,7 @@
               "enum": [
                 "draft",
                 "published",
+                "paused",
                 "archived"
               ]
             },
@@ -535,6 +536,7 @@
               "enum": [
                 "draft",
                 "published",
+                "paused",
                 "archived"
               ]
             },
@@ -886,6 +888,7 @@
               "enum": [
                 "draft",
                 "published",
+                "paused",
                 "archived"
               ]
             },

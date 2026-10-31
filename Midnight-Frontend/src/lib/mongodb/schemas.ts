@@ -7,7 +7,7 @@ const count = z.number().int().nonnegative();
 const timestamps = { createdAt: timestamp.nullable(), updatedAt: timestamp.nullable() };
 const document = { _id: id.optional(), schemaVersion: z.literal(1) };
 const provenance = z.enum(["sample", "measured", "unknown"]);
-export const publicationStatus = z.enum(["draft", "published", "archived"]);
+export const publicationStatus = z.enum(["draft", "published", "paused", "archived"]);
 
 /** Application/API documents use ISO timestamps; sessions use BSON Dates for TTL storage. */
 export const articleSchema = z.object({

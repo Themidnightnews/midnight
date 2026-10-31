@@ -1,3 +1,4 @@
+import { ThemeMenu } from "@/components/theme-toggle";
 import { useEffect, useRef, useState } from "react";
 import { PageLock } from "@/components/page-lock";
 import { AccountButton } from "@/components/account-button";
@@ -57,7 +58,7 @@ export function CompactHeader() {
 
           <div ref={boxRef} className="relative w-full">
             <div className="search-field flex h-11 items-center gap-2 rounded-full px-3 sm:px-4">
-              <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
               <input
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
@@ -76,6 +77,7 @@ export function CompactHeader() {
           </div>
 
           <div className="flex items-center gap-1 justify-self-end md:gap-4 lg:gap-5 xl:gap-6">
+            {!user && <ThemeMenu />}
             {user ? <AccountButton compact /> : (
               <Button asChild className="h-11 rounded-full px-4 font-bold sm:px-6">
                 <Link to="/midnight-report">The Report</Link>

@@ -5,6 +5,7 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/r
 import { Bookmark, Heart, Link2, MessageSquare, Pencil, Reply, Share2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UserAvatar } from "@/components/account-button";
 import { useAuth } from "@/hooks/use-auth";
@@ -279,7 +280,21 @@ function CommentItem({ c, kids, depth, slug, mine, onChange, post }: { c: Commen
                 <button aria-expanded={open} onClick={() => { if (open && mode !== "reply" && user) { setMode("reply"); return; } const next = !open; setOpen(next); setShown(next ? REPLY_PAGE : 0); setMode(next && user ? "reply" : "view"); }} className={`comment-action ${open ? "text-primary" : ""}`}><Reply className="h-3.5 w-3.5" /> {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? "reply" : "replies"}` : "Reply"}</button>
               ) : null}
               {isMine && canEditComment(c.createdAt) && mode !== "edit" && <button onClick={() => setMode("edit")} className="comment-action"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
-              {isMine && <button onClick={() => { if (confirm("Delete this comment?")) del.mutate(); }} className="comment-action hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
+              {isMine && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild><button className="comment-action hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /> Delete</button></AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this comment?</AlertDialogTitle>
+                      <AlertDialogDescription>It will be removed from the discussion. This can't be undone.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep it</AlertDialogCancel>
+                      <AlertDialogAction data-tone="solid-danger" onClick={() => del.mutate()}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </>
         )}

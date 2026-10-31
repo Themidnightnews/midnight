@@ -31,6 +31,8 @@ export const Route = createFileRoute("/admin")({
       { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Admin — Midnight" },
       { property: "og:description", content: "Midnight site administration." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: () => <ConfirmProvider><AdminPage /></ConfirmProvider>,
@@ -112,7 +114,7 @@ function Dashboard({ me }: { me: Me }) {
   const nav = (rail: boolean) => (
     <>
       <div className="mb-5 flex min-w-0 items-center gap-3 px-1">
-        <span className="avatar-orb h-10 w-10 shrink-0 text-sm" style={{ background: "var(--primary)" }}>{me.username.slice(0, 1).toUpperCase()}</span>
+        <span className="avatar-orb h-10 w-10 shrink-0 text-sm" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>{me.username.slice(0, 1).toUpperCase()}</span>
         <div className="admin-label min-w-0">
           <a href="/" className="block font-serif text-xl leading-tight">Midnight</a>
           <p className="truncate text-xs text-muted-foreground">{me.username} · {me.role === "admin" ? "Admin" : "Editor"}</p>
@@ -143,7 +145,7 @@ function Dashboard({ me }: { me: Me }) {
       <header className="admin-topbar glass-strong shadow-float">
         <button type="button" className="admin-icon-btn" aria-label="Open menu" onClick={() => setDrawer(true)}><Menu className="h-5 w-5" /></button>
         <p className="truncate text-center font-serif text-lg">{current?.label}</p>
-        <span className="avatar-orb h-10 w-10 text-sm" style={{ background: "var(--primary)" }}>{me.username.slice(0, 1).toUpperCase()}</span>
+        <span className="avatar-orb h-10 w-10 text-sm" style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>{me.username.slice(0, 1).toUpperCase()}</span>
       </header>
       {drawer && (
         <>
@@ -221,7 +223,7 @@ function State({ q, empty, children }: { q: { isLoading: boolean; error: unknown
 function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <label className="admin-search">
-      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
       <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
       {value && <button type="button" aria-label="Clear search" onClick={() => onChange("")}><X className="h-4 w-4 text-muted-foreground" /></button>}
     </label>

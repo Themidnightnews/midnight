@@ -1,5 +1,7 @@
+import { ThemeMenuItem, ThemeMenuRow, ThemeHeaderButton } from "@/components/theme-toggle";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PageLock } from "@/components/page-lock";
+import { useHoverMenu } from "@/hooks/use-hover-menu";
 import { AccountButton } from "@/components/account-button";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { articles, navigationSections, searchArticles, slugify } from "@/data/news";
@@ -45,25 +47,16 @@ function PremiumMenuIcon({ className }: { className?: string }) {
 const slugOf = (name: string) => slugify(name);
 
 function MoreCategories() {
-  const [open, setOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const enter = () => {
-    clearTimeout(timer.current);
-    setOpen(true);
-  };
-  const leave = () => {
-    timer.current = setTimeout(() => setOpen(false), 150);
-  };
+  const { open, byHover, onOpenChange, close, trigger, content } = useHoverMenu();
   return (
     <>
-    <PageLock active={open} onClose={() => setOpen(false)} />
-    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
-      <DropdownMenuTrigger onMouseEnter={enter} onMouseLeave={leave} className="flex items-center gap-1 whitespace-nowrap outline-hidden">
+    <PageLock active={open && !byHover} onClose={close} />
+    <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
+      <DropdownMenuTrigger {...trigger} className="flex items-center gap-1 whitespace-nowrap outline-hidden">
         More categories <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        onMouseEnter={enter}
-        onMouseLeave={leave}
+        {...content}
         align="end"
         sideOffset={14}
         className="glass grid max-h-[min(70dvh,var(--radix-dropdown-menu-content-available-height))] w-80 max-w-[calc(100vw-2rem)] grid-cols-2 gap-1 overflow-y-auto overscroll-contain rounded-2xl border-0 p-2"
@@ -73,6 +66,7 @@ function MoreCategories() {
             <Link to="/section/$slug" params={{ slug: c.slug }}>{c.name}</Link>
           </DropdownMenuItem>
         ))}
+        <div className="col-span-2 mt-1 border-t border-navigation-border pt-1"><ThemeMenuItem /></div>
       </DropdownMenuContent>
     </DropdownMenu>
     </>
@@ -179,14 +173,14 @@ export function SiteHeader() {
                 setSearchOpen((o) => !o);
                 setMenuOpen(false);
               }}
-              className={`flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight [&_svg]:size-6 ${cfg.signIn ? "md:hidden" : ""} ${searchOpen ? "bg-secondary" : ""}`}
+              className={`flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight [&_svg]:size-4 ${cfg.signIn ? "md:hidden" : ""} ${searchOpen ? "bg-secondary" : ""}`}
             >
-              <Search className="h-6 w-6 shrink-0" />
+              <Search className="h-4 w-4 shrink-0" />
               <span className="truncate">Search Midnight…</span>
             </Button>
           )}
           {cfg.strip && (
-            <div className="nav-strip hidden min-w-0 flex-1 overflow-hidden md:block">
+            <div className="nav-strip hidden min-w-0 flex-1 overflow-hidden lg:block">
               <ul className="animate-nav-strip flex w-max items-center text-[15px] font-medium whitespace-nowrap">
                 {[0, 1].map((copy) =>
                   ["Explore", "Trends", ...mainItems, "The Midnight Report"].map((i) => (
@@ -205,7 +199,7 @@ export function SiteHeader() {
             </div>
           )}
           {cfg.more && (
-            <div className="hidden shrink-0 text-[15px] font-medium md:block">
+            <div className="hidden shrink-0 text-[15px] font-medium lg:block">
               <MoreCategories />
             </div>
           )}
@@ -220,12 +214,13 @@ export function SiteHeader() {
                 setSearchOpen((o) => !o);
                 setMenuOpen(false);
               }}
-              className={`hidden h-12 w-52 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight md:flex xl:w-64 [&_svg]:size-6 ${searchOpen ? "bg-secondary" : ""}`}
+              className={`hidden h-12 w-52 items-center gap-2.5 rounded-full search-field px-4 text-sm text-muted-foreground transition hover:bg-navigation-highlight md:flex xl:w-64 [&_svg]:size-4 ${searchOpen ? "bg-secondary" : ""}`}
             >
-              <Search className="h-6 w-6 shrink-0" />
+              <Search className="h-4 w-4 shrink-0" />
               <span className="truncate">Search Midnight…</span>
             </Button>
           )}
+          <ThemeHeaderButton className={`hidden sm:grid ${cfg.more ? "lg:hidden" : ""}`} />
           {cfg.signIn && <div className="hidden md:block"><AccountButton /></div>}
           {cfg.report && (
             <Button asChild className="hidden h-11 rounded-full px-6 font-bold md:inline-flex"><Link to="/midnight-report">The Report</Link></Button>
@@ -239,7 +234,7 @@ export function SiteHeader() {
                   setMenuOpen((o) => !o);
                   setSearchOpen(false);
                 }}
-                className={`grid h-12 w-12 place-items-center rounded-full border hover:bg-navigation-highlight [&_svg]:size-7 ${menuOpen ? "border-border bg-navigation-highlight shadow-sm" : "border-transparent"} ${needsBurger ? "" : "md:hidden"}`}
+                className={`grid h-12 w-12 place-items-center rounded-full border hover:bg-navigation-highlight [&_svg]:size-7 ${menuOpen ? "border-border bg-navigation-highlight shadow-sm" : "border-transparent"} ${needsBurger ? "" : "lg:hidden"}`}
               >
                 {menuOpen ? <X className="h-7 w-7" /> : <PremiumMenuIcon className="h-7 w-7" />}
               </Button>
@@ -251,7 +246,7 @@ export function SiteHeader() {
       {searchOpen && (
         <div ref={searchPanelRef} className="glass mx-auto mt-3 max-w-2xl rounded-[1.75rem] p-3">
           <div className="search-field flex items-center gap-3 rounded-full px-4">
-            <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
               onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -308,6 +303,7 @@ export function SiteHeader() {
             ))}
           </ul>
           <div aria-label="Menu actions" className="grid shrink-0 grid-cols-2 items-center gap-3 border-t border-navigation-border px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <ThemeMenuRow />
             {user || loading ? <AccountButton onNavigate={() => setMenuOpen(false)} /> : (
               <Button asChild variant="outline" className="h-11 rounded-full font-semibold">
                 <Link to="/auth" search={{ mode: "signup" }} onClick={() => setMenuOpen(false)}>Sign up</Link>

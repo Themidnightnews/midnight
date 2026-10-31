@@ -261,14 +261,14 @@ function DeleteAccount({ onDone }: { onDone: () => void }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild><Button variant="ghost" className="mt-4 rounded-full text-destructive"><Trash2 className="h-4 w-4" /> Delete account</Button></AlertDialogTrigger>
-      <AlertDialogContent className="rounded-[2rem]">
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete your account?</AlertDialogTitle>
           <AlertDialogDescription>Your profile, saved stories and likes are removed and your comments are deleted. This can't be undone.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="rounded-full">Keep account</AlertDialogCancel>
-          <AlertDialogAction className="rounded-full bg-destructive text-destructive-foreground" onClick={() => del.mutate()}>Delete forever</AlertDialogAction>
+          <AlertDialogCancel>Keep account</AlertDialogCancel>
+          <AlertDialogAction data-tone="solid-danger" onClick={() => del.mutate()}>Delete forever</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

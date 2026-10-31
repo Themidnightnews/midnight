@@ -1,3 +1,13 @@
+<!-- LOVABLE:BEGIN -->
+> [!IMPORTANT]
+> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
+> published git history — force pushing, or rebasing/amending/squashing commits
+> that are already pushed — as it rewrites history on Lovable's side and the
+> user will likely lose their project history.
+>
+> Commits you push to the connected branch sync back to Lovable and show up in
+> the editor, so keep the branch in a working state.
+<!-- LOVABLE:END -->
 
 - The canonical news catalogue owns each story's category and image; listing cards resolve these by slug to keep detail pages consistent.
 - Both header category menus use navigationSections from the canonical catalogue, falling back to existing labels only when no sections are loaded, so stored slugs and newly added categories stay accessible consistently.
@@ -26,3 +36,4 @@
 - Request protection (probe/scanner blocking, per-visitor rate limits with escalating temporary bans, body/URL caps, security headers, cache headers) lives in src/lib/protection.ts and runs in src/server.ts before the app; it is per-isolate and complements the hosting edge flood protection.
 - Story timestamps in MongoDB are ISO strings (the live articles validator is strict); mongodb/schema.json is JSON-Schema dialect, so translate const/exclusiveMinimum/format before collMod.
 - The site builds with @lovable.dev/vite-tanstack-config (Cloudflare Worker target) and reads MONGODB_URI / COMMUNITY_ENCRYPTION_KEY / ADMIN_USERNAME / ADMIN_PASSWORD from project secrets; nitro.config.ts from the old Vercel build is not used.
+- The light/dark switch lives only inside menus (section menu, More categories, account menu, compact-header menu), never directly on the header; dark mode overrides at the end of styles.css keep surfaces neutral (zero-chroma) so brand gradients are the only colour.

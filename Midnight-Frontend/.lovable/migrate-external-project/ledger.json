@@ -1,44 +1,79 @@
 [
- {
-  "capability": "code, pages, design, tests",
-  "source": "archive",
-  "outcome": "migrate",
-  "status": "done",
-  "next_action": "run tests once secrets exist"
- },
- {
-  "capability": "MongoDB data (stories, readers, sign-in, admin, settings)",
-  "source": "user's MongoDB",
-  "outcome": "preserve",
-  "status": "verified",
-  "next_action": "none"
- },
- {
-  "capability": "admin bootstrap",
-  "source": "archive",
-  "outcome": "preserve",
-  "status": "done",
-  "next_action": "sign in at /admin to confirm"
- },
- {
-  "capability": "Google Analytics",
-  "source": "archive",
-  "outcome": "preserve",
-  "status": "pending",
-  "next_action": "verified in preview"
- },
- {
-  "capability": "webhooks/cron",
-  "source": "archive",
-  "outcome": "none",
-  "status": "verified",
-  "next_action": "none"
- },
- {
-  "capability": "cutover",
-  "source": "-",
-  "outcome": "pending",
-  "status": "pending",
-  "next_action": "publish, point themidnightnews.com"
- }
+  {
+    "capability": "code, pages, design, tests",
+    "source": "code archive (TanStack Start, same template revision)",
+    "outcome": "migrate",
+    "status": "done",
+    "next_action": "build OK; 51/53 tests pass; 2 tests + editorial suite need live MongoDB stories"
+  },
+  {
+    "capability": "site icons (favicon.ico, icon-192/512, apple-touch-icon)",
+    "source": "missing from archive; regenerated from public/favicon.svg",
+    "outcome": "migrate",
+    "status": "done",
+    "next_action": "none"
+  },
+  {
+    "capability": "database (stories, sections, trends, reports, comments, likes, saves, admin data)",
+    "source": "user's MongoDB (database 'midnight')",
+    "outcome": "preserve (user chose to keep MongoDB)",
+    "status": "pending",
+    "next_action": "MONGODB_URI secret, then verify stories load"
+  },
+  {
+    "capability": "reader auth (email + password, MongoDB sessions)",
+    "source": "MongoDB users/userSessions",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "verify sign-up/sign-in after secrets"
+  },
+  {
+    "capability": "field encryption of reader data",
+    "source": "COMMUNITY_ENCRYPTION_KEY",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "same key value as before must be entered"
+  },
+  {
+    "capability": "admin dashboard (/admin)",
+    "source": "MongoDB staff accounts; ADMIN_USERNAME/ADMIN_PASSWORD only used if no admin exists",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "verify /admin sign-in"
+  },
+  {
+    "capability": "records",
+    "source": "live MongoDB",
+    "outcome": "no import needed (data stays in MongoDB)",
+    "status": "accepted",
+    "next_action": "none"
+  },
+  {
+    "capability": "Google Analytics + Vercel Analytics",
+    "source": "GOOGLE_ANALYTICS_MEASUREMENT_ID (optional)",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "optional measurement ID"
+  },
+  {
+    "capability": "request protection, sitemap.xml, robots, SEO",
+    "source": "archive",
+    "outcome": "migrate",
+    "status": "done",
+    "next_action": "spot-check after secrets"
+  },
+  {
+    "capability": "webhooks / cron / external callers",
+    "source": "archive",
+    "outcome": "none detected",
+    "status": "verified",
+    "next_action": "none"
+  },
+  {
+    "capability": "cutover",
+    "source": "themidnightnews.com",
+    "outcome": "pending",
+    "status": "pending",
+    "next_action": "publish, point domain"
+  }
 ]

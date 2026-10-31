@@ -1,3 +1,4 @@
+import { themeBootScript } from "@/components/theme-toggle";
 import { absUrl, CONTACT_EMAIL, SITE_NAME } from "@/lib/site";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -111,12 +112,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/site.webmanifest" },
     ],
     // Google tag (gtag.js) is loaded in RootComponent once the measurement ID arrives from the server.
     scripts: [
       { type: "application/ld+json", children: JSON.stringify([
-        { "@context": "https://schema.org", "@type": "NewsMediaOrganization", name: SITE_NAME, url: absUrl("/"), email: CONTACT_EMAIL },
+        { "@context": "https://schema.org", "@type": "NewsMediaOrganization", name: SITE_NAME, url: absUrl("/"), logo: absUrl("/icon-512.png"), email: CONTACT_EMAIL },
         { "@context": "https://schema.org", "@type": "WebSite", name: SITE_NAME, url: absUrl("/"), potentialAction: { "@type": "SearchAction", target: `${absUrl("/search")}?q={search_term_string}`, "query-input": "required name=search_term_string" } },
       ]) },
     ],
@@ -137,8 +142,9 @@ const isTrendsPath = (p: string) => p === "/trends" || p.startsWith("/trends/");
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
       </head>
       <body>

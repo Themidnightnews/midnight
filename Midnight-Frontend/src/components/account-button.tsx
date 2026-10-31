@@ -3,6 +3,7 @@ import { LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { ThemeMenuItem } from "@/components/theme-toggle";
 
 export function UserAvatar({ name, hue = 280, size = "md" }: { name: string; hue?: number; size?: "sm" | "md" | "lg" }) {
   const dims = size === "lg" ? "h-24 w-24 text-3xl" : size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm";
@@ -34,6 +35,7 @@ export function AccountButton({ compact = false, onNavigate }: { compact?: boole
         <DropdownMenuLabel className="truncate text-xs font-medium text-muted-foreground">{user.email}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild className="rounded-xl"><Link to="/profile" onClick={onNavigate}><UserRound className="h-4 w-4" /> Your profile</Link></DropdownMenuItem>
+        <ThemeMenuItem />
         <DropdownMenuItem className="rounded-xl" onSelect={() => signOut()}><LogOut className="h-4 w-4" /> Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

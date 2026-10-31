@@ -1,4 +1,5 @@
 import { absUrl } from "@/lib/site";
+import { useHoverMenu } from "@/hooks/use-hover-menu";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type * as React from "react";
@@ -41,19 +42,7 @@ function TrendsPage() {
   const { tag, q } = Route.useSearch();
   const navigate = useNavigate({ from: "/trends/" });
   const [sort, setSort] = useState<SectionSort>("latest");
-  const [tagsOpen, setTagsOpen] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const openTags = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
-    clearTimeout(closeTimer.current);
-    setTagsOpen(true);
-  };
-  const closeTagsSoon = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
-    clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setTagsOpen(false), 180);
-  };
-  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  const tagsMenu = useHoverMenu();
   const hashtags = trendHashtags();
   const active = tag && hashtags.some((h) => h.toLowerCase() === tag.toLowerCase()) ? tag : undefined;
 
@@ -76,11 +65,11 @@ function TrendsPage() {
         </div>
         <div className="pill-scroll -mx-6 min-w-0 overflow-x-auto px-6 md:-mx-8 md:px-8 lg:mx-0 lg:px-0">
           <div className="flex w-max items-center gap-2">
-            <DropdownMenu modal={false} open={tagsOpen} onOpenChange={setTagsOpen}>
-              <DropdownMenuTrigger onPointerEnter={openTags} onPointerLeave={closeTagsSoon} className="pill-filter flex shrink-0 items-center gap-1.5 h-9 rounded-full px-4 text-sm font-bold whitespace-nowrap">
+            <DropdownMenu modal={false} open={tagsMenu.open} onOpenChange={tagsMenu.onOpenChange}>
+              <DropdownMenuTrigger {...tagsMenu.trigger} className="pill-filter flex shrink-0 items-center gap-1.5 h-9 rounded-full px-4 text-sm font-bold whitespace-nowrap">
                 {active ? `#${active}` : "All hashtags"} <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent onPointerEnter={openTags} onPointerLeave={closeTagsSoon} align="end" sideOffset={10} className="glass max-h-80 w-64 overflow-y-auto rounded-2xl border-0 p-2">
+              <DropdownMenuContent {...tagsMenu.content} align="end" sideOffset={10} className="glass max-h-80 w-64 overflow-y-auto rounded-2xl border-0 p-2">
                 <DropdownMenuItem onSelect={() => setTag(undefined)} className={`rounded-xl px-3 py-2 font-medium focus:bg-navigation-highlight focus:text-foreground ${!active ? "font-bold" : ""}`}>
                   All hashtags
                 </DropdownMenuItem>
