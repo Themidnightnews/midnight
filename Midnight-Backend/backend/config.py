@@ -20,6 +20,9 @@ Nothing is hard-coded in the code.
                             scrape; set to 1 afterwards so only the last day is picked up)
   PUBLISHED_AT_MODE         source = keep each story's own original publish time (default, exactly as before)
                             own    = stamp stories with OUR publishing time (set this after the bulk scrape)
+  IMAGE_MAX_REUSE_SAME_SOURCE  refuse a picture an outlet already used on this many other articles (default 1)
+  IMAGE_MAX_REUSE_ANY          refuse a picture already on this many articles overall (default 3)
+  MIN_SOURCE_WORDS          real words a source page needs before it is written about (default 90)
   FEATURED_COUNT            how many recent stories get featured:true for the hero (default 8)
   FEATURED_WINDOW_HOURS     how far back stories can be featured (default 30)
 """
@@ -157,6 +160,29 @@ def factcheck_settings():
         mode = "balanced"
     llm_on = (env("FACTCHECK_LLM", "on") or "on").lower() not in ("off", "0", "false", "no")
     return {"llm": llm_on and mode != "light", "mode": mode}
+
+
+def image_guard_settings():
+    """How often the same picture may appear before it counts as a generic placeholder.
+      IMAGE_MAX_REUSE_SAME_SOURCE  articles of the SAME outlet that may already use this exact picture (default 1:
+                                   a second story from that outlet with the same picture is refused; 0 = off)
+      IMAGE_MAX_REUSE_ANY          published articles from any outlets that may already use it (default 3; 0 = off)"""
+    def num(name, default):
+        try:
+            return max(0, int(float(env(name, str(default)))))
+        except ValueError:
+            return default
+    return {"same_source": num("IMAGE_MAX_REUSE_SAME_SOURCE", 1), "any_source": num("IMAGE_MAX_REUSE_ANY", 3)}
+
+
+def source_settings():
+    """MIN_SOURCE_WORDS: real article words (after publisher disclaimers are stripped) a source page must have
+    before any LLM credit is spent on it (default 90). Audio-only teasers and two-sentence stubs fall below it."""
+    try:
+        words = max(30, int(float(env("MIN_SOURCE_WORDS", "90"))))
+    except ValueError:
+        words = 90
+    return {"min_words": words}
 
 
 def retry_settings():

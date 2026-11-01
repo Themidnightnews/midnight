@@ -1,21 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Activity as Activity_, BarChart3, Check, ChevronsLeft, ChevronsRight, FileText, LayoutDashboard, LogOut, Menu, MessageSquare, Minus,
-  Search, ShieldCheck, UserCog, Users, UsersRound, X,
+  Search, ShieldCheck, Star, Trash2, UserCog, Users, UsersRound, X,
 } from "lucide-react";
 import { ColorGlow } from "@/components/color-glow";
 import { PasswordField } from "@/components/password-field";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Loader, LoaderBlock } from "@/components/loader";
 import { ConfirmProvider, useConfirm } from "@/components/admin/confirm";
 import { DaysPicker, SelectMenu, type Option } from "@/components/admin/select-menu";
 import {
   adminMe, adminLogin, adminLogout, adminStats, adminOverview, adminListArticles, adminGetArticle,
-  adminSaveArticle, adminSetArticleStatus, adminCommunityTotals, adminListComments, adminRemoveComment, adminListReaders,
+  adminSaveArticle, adminSetArticleStatus, adminBulkArticles, adminCommunityTotals, adminListComments, adminRemoveComment, adminListReaders,
   adminSetMemberBlocked, adminDeleteMember, adminSecurity, adminUpdateSettings, adminRevokeSession,
   adminListTeam, adminActivityLog, adminReaderActivity, adminCreateEditor, adminUpdateTeamMember, adminUpdateMyAccount,
 } from "@/lib/admin.functions";
@@ -386,42 +388,58 @@ function Analytics() {
 function Articles() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const bulkArticles = useServerFn(adminBulkArticles);
+  const setArticleStatus = useServerFn(adminSetArticleStatus);
   const [query, setQuery] = useState("");
   const [days, setDays] = useState<number | null>(null);
   const [section, setSection] = useState<string>("all");
-  const [status, setStatus] = useState<"all" | "published" | "paused">("all");
+  const [source, setSource] = useState<string>("all");
+  const [status, setStatus] = useState<"all" | "draft" | "published" | "paused" | "archived">("all");
   const [featured, setFeatured] = useState<"all" | "featured" | "regular">("all");
   const [editing, setEditing] = useState<string | null>(null);
   const dq = useDebounced(query);
-  const f = { q: dq, days, section, status, featured };
+  const f = { q: dq, days, section, source, status, featured };
   const { q, first, rows, total } = usePaged(["admin", "articles", f], (offset) => adminListArticles({ data: { ...f, offset } }));
   const [sections, setSections] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
   useEffect(() => { if (first?.sections) setSections(first.sections); }, [first?.sections]);
+  useEffect(() => { if (first?.sources) setSources(first.sources); }, [first?.sources]);
   const sel = useSelection(rows.map((a) => a.slug));
-  const refresh = () => qc.invalidateQueries({ queryKey: ["admin", "articles"] });
-  const setOne = useMutation({ mutationFn: (v: { slug: string; status: "published" | "paused" }) => adminSetArticleStatus({ data: v }), onSuccess: () => { toast.success("Updated"); refresh(); }, onError: err });
+  useEffect(() => { sel.clear(); }, [dq, days, section, source, status, featured]);
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["admin", "articles"] }); qc.invalidateQueries({ queryKey: ["catalogue"] }); };
+  const setOne = useMutation({ mutationFn: (v: { slug: string; status: "published" | "paused" }) => setArticleStatus({ data: v }), onSuccess: () => { toast.success("Updated"); refresh(); }, onError: err });
+  const batch = useMutation({
+    mutationFn: (v: { slugs: string[]; action: "delete" | "publish" | "pause" | "feature" | "unfeature" }) => bulkArticles({ data: v }),
+    onSuccess: (r, v) => { toast.success(`${r.count} ${r.count === 1 ? "story" : "stories"} ${v.action === "delete" ? "deleted" : "updated"}`); sel.clear(); refresh(); },
+    onError: (e) => { err(e); refresh(); },
+  });
+  const busy = batch.isPending || setOne.isPending;
 
   const toggleOne = async (slug: string, title: string, paused: boolean) => {
     const next = paused ? "published" : "paused";
     if (await confirm({ title: paused ? "Publish this story?" : "Pause this story?", body: <>“{title}” will be {paused ? "visible on the site again" : "hidden from the site"}.</>, confirmLabel: paused ? "Publish" : "Pause", tone: paused ? "default" : "danger" }))
       setOne.mutate({ slug, status: next });
   };
-  const bulk = async (next: "published" | "paused") => {
-    const n = sel.picked.length;
-    if (!(await confirm({ title: `${next === "paused" ? "Pause" : "Publish"} ${n} ${n === 1 ? "story" : "stories"}?`, tone: next === "paused" ? "danger" : "default", confirmLabel: next === "paused" ? "Pause all" : "Publish all" }))) return;
-    await runAll(sel.picked, (slug) => adminSetArticleStatus({ data: { slug, status: next } }));
-    sel.clear(); refresh();
+  const bulk = async (action: "delete" | "publish" | "pause" | "feature" | "unfeature", slugs = [...sel.picked], title?: string) => {
+    if (!slugs.length || busy) return;
+    const label = { delete: "Delete", publish: "Publish", pause: "Pause", feature: "Feature", unfeature: "Unfeature" }[action];
+    const subject = title ? `“${title}”` : `${slugs.length} ${slugs.length === 1 ? "story" : "stories"}`;
+    if (!(await confirm({ title: `${label} ${subject}?`, tone: action === "delete" || action === "pause" ? "danger" : "default", confirmLabel: action === "delete" ? "Continue" : label,
+      ...(action === "delete" ? { body: "The selected articles will be permanently removed from the site. Reader history is retained.", twoStep: { title: "Permanently delete?", body: subject, confirmLabel: "Delete permanently" } } : {}),
+    }))) return;
+    batch.mutate({ slugs, action });
   };
   if (editing) return <ArticleEditor slug={editing} onClose={() => setEditing(null)} />;
-  const chips = [section !== "all" && ["Section: " + section, () => setSection("all")], status !== "all" && ["Status: " + status, () => setStatus("all")], featured !== "all" && [featured, () => setFeatured("all")]].filter(Boolean) as [string, () => void][];
+  const chips = [source !== "all" && ["Source: " + source, () => setSource("all")], section !== "all" && ["Section: " + section, () => setSection("all")], status !== "all" && ["Status: " + status, () => setStatus("all")], featured !== "all" && [featured, () => setFeatured("all")]].filter(Boolean) as [string, () => void][];
   return (
     <>
       <H sub={first ? `${rows.length} of ${total} stories shown` : "Edit any story, or pause it to hide it from the site."}>Articles</H>
       <div className="admin-filters">
-        <SearchBox value={query} onChange={setQuery} placeholder="Search title, slug or section" />
+        <SearchBox value={query} onChange={setQuery} placeholder="Search title, slug, section or source" />
         <DaysPicker value={days} onChange={setDays} allowAll prefix="Published" />
         <SelectMenu prefix="Section" value={section} onChange={setSection} options={opts("All sections", sections)} />
-        <SelectMenu prefix="Status" value={status} onChange={setStatus} options={[{ value: "all", label: "Any" }, { value: "published", label: "Published" }, { value: "paused", label: "Paused" }]} />
+        <SelectMenu prefix="Source" value={source} onChange={setSource} options={opts("All sources", sources)} />
+        <SelectMenu prefix="Status" value={status} onChange={setStatus} options={[{ value: "all", label: "Any" }, { value: "draft", label: "Draft" }, { value: "published", label: "Published" }, { value: "paused", label: "Paused" }, { value: "archived", label: "Archived" }]} />
         <SelectMenu prefix="Type" value={featured} onChange={setFeatured} options={[{ value: "all", label: "All" }, { value: "featured", label: "Featured" }, { value: "regular", label: "Regular" }]} />
       </div>
       {chips.length > 0 && <div className="flex flex-wrap gap-2">{chips.map(([l, f]) => <span key={l} className="admin-chip">{l}<button type="button" aria-label={`Remove ${l}`} onClick={f}><X className="h-3 w-3" /></button></span>)}</div>}
@@ -439,12 +457,14 @@ function Articles() {
                   <span className="admin-badge" data-tone={a.status === "paused" ? "warn" : "ok"}>{a.status}</span>
                   {a.featured && <span className="admin-badge">featured</span>}
                   <span>{a.section || "—"}</span><span>{fmtDay(a.publishedAt)}</span>
+                  {a.source && <span>{a.source}</span>}
                   <span className="tabular-nums">{a.views} views · {a.visitors} people (1y)</span>
                 </div>
               </div>
               <div className="admin-row-actions admin-media-actions">
                 <button type="button" className="admin-btn" onClick={() => setEditing(a.slug)}>Edit</button>
-                <button type="button" className="admin-btn" onClick={() => toggleOne(a.slug, a.title, a.status === "paused")}>{a.status === "paused" ? "Publish" : "Pause"}</button>
+                <Button variant="ghost" className="admin-btn" disabled={busy} onClick={() => toggleOne(a.slug, a.title, a.status !== "published")}>{a.status === "published" ? "Pause" : "Publish"}</Button>
+                <Button variant="ghost" size="icon" className="admin-btn" data-tone="danger" disabled={busy} title="Delete article" aria-label={`Delete ${a.title}`} onClick={() => bulk("delete", [a.slug], a.title)}><Trash2 /></Button>
               </div>
             </div>
           ))}
@@ -452,8 +472,11 @@ function Articles() {
         <MoreSentinel q={q} />
       </State>
       <BulkBar count={sel.picked.length} onClear={sel.clear}>
-        <button type="button" className="admin-btn" onClick={() => bulk("published")}>Publish</button>
-        <button type="button" className="admin-btn" data-tone="danger" onClick={() => bulk("paused")}>Pause</button>
+        <Button variant="ghost" className="admin-btn" disabled={busy} onClick={() => bulk("publish")}>Publish</Button>
+        <Button variant="ghost" className="admin-btn" disabled={busy} onClick={() => bulk("pause")}>Pause</Button>
+        <Button variant="ghost" className="admin-btn" disabled={busy} onClick={() => bulk("feature")}><Star />Feature</Button>
+        <Button variant="ghost" className="admin-btn" disabled={busy} onClick={() => bulk("unfeature")}>Unfeature</Button>
+        <Button variant="ghost" className="admin-btn" data-tone="danger" disabled={busy} onClick={() => bulk("delete")}><Trash2 />Delete</Button>
       </BulkBar>
     </>
   );
@@ -462,12 +485,13 @@ function Articles() {
 function ArticleEditor({ slug, onClose }: { slug: string; onClose: () => void }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const saveArticle = useServerFn(adminSaveArticle);
   const q = useQuery({ queryKey: ["admin", "article", slug], queryFn: () => adminGetArticle({ data: { slug } }) });
   const stats = useQuery({ queryKey: ["admin", "stats", 30, slug], queryFn: () => adminStats({ data: { days: 30, slug } }) });
   const [f, setF] = useState<NonNullable<typeof q.data> | null>(null);
   const a = f ?? q.data ?? null;
   const save = useMutation({
-    mutationFn: () => { const { status: _s, ...rest } = a!; return adminSaveArticle({ data: rest }); },
+    mutationFn: () => { if (!a) throw new Error("Story not found"); const { status: _s, ...rest } = a; return saveArticle({ data: rest }); },
     onSuccess: () => { toast.success("Story saved"); qc.invalidateQueries({ queryKey: ["admin", "articles"] }); onClose(); }, onError: err,
   });
   const back = async () => { if (!f || await confirm({ title: "Leave without saving?", body: "Your changes to this story will be lost.", confirmLabel: "Discard changes", tone: "danger" })) onClose(); };

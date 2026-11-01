@@ -1,3 +1,9 @@
+# Admin articles (Nov 1)
+- [ ] Diagnose and repair article document validation failures without bypassing validation.
+- [ ] Add confirmed individual/bulk deletion and bulk featured controls; retain other existing bulk actions.
+- [ ] Search and filter articles by stored source, across all pages.
+- [ ] Test rules and verify authenticated admin operations with temporary stories only.
+
 # Filter strips and credentials (Oct 31, 11:10)
 - [x] Open the secure form for the existing MongoDB and admin credentials.
 - [x] Keep both article and trending filter strips inset equally while scrolling.

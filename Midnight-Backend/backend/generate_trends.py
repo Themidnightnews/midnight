@@ -29,6 +29,7 @@ import config
 import factcheck
 import llm
 from config import check_key_or_exit
+import images as image_guard
 from images import NoVerifiedImage, looks_like_url, pick_verified_images
 from quality import Incomplete
 from schema import iso, now_iso
@@ -94,6 +95,8 @@ def process_trend(trend, store, seen, settings, dry_run=False, mon=None, gather=
     same = seen.same_event_as(urls)
     if same:
         raise Skip(f"same event as an existing trend post ({same})")
+    if not dry_run:
+        image_guard.use_database(getattr(store, "db", None))
     good, rejected = pick_images(material["images"], limit=3)
     if not good:
         why = "; ".join(f"{u.split('/')[-1][:30]}: {w}" for u, w in rejected[:3]) or "no image found"
@@ -133,6 +136,7 @@ def process_trend(trend, store, seen, settings, dry_run=False, mon=None, gather=
     final_gate(doc)
     if not dry_run:
         store.publish_trend(doc)
+        image_guard.record_use(image_guard.fingerprint_of(good[0]), good[0], first["name"], doc.get("id"))
     return doc, urls, post
 
 

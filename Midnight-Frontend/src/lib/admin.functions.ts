@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { escapeRegex, pageInput, queryWords, sinceDate, slicePage, toPage } from "./admin-paging";
+import { articleBulkInput, articleEditFields, articleFilter, articleInput, articleListInput, selectedArticleFilter } from "./admin-articles";
+import { publicationStatus } from "./mongodb/schemas";
 
 const srv = () => import("./admin.server");
 const MAX_FAILED_LOGINS = 10;
@@ -115,43 +117,33 @@ async function clearCaches() {
 }
 
 export const adminListArticles = createServerFn({ method: "GET" })
-  .inputValidator((d) => pageInput.extend({
-    section: z.string().max(100).default("all"),
-    status: z.enum(["all", "published", "paused"]).default("all"),
-    featured: z.enum(["all", "featured", "regular"]).default("all"),
-  }).parse(d))
+  .inputValidator((d) => articleListInput.parse(d))
   .handler(async ({ data }) => {
     const { requireAdmin, viewStats } = await srv();
     await requireAdmin("editor");
     const { withDb } = await import("./community.server");
-    const and: Record<string, unknown>[] = [];
-    for (const w of queryWords(data.q)) { const rx = { $regex: escapeRegex(w), $options: "i" }; and.push({ $or: [{ title: rx }, { slug: rx }, { section: rx }] }); }
-    const since = sinceDate(data.days);
-    if (since) and.push({ $or: [{ publishedAt: { $gte: since } }, { publishedAt: { $gte: since.toISOString() } }] });
-    if (data.section !== "all") and.push({ section: data.section });
-    if (data.status === "paused") and.push({ status: "paused" }); else if (data.status === "published") and.push({ status: { $ne: "paused" } });
-    if (data.featured !== "all") and.push(data.featured === "featured" ? { featured: true } : { featured: { $ne: true } });
-    const filter = and.length ? { $and: and } : {};
-    const [{ docs, total, sections }, stats] = await Promise.all([
+    const filter = articleFilter(data);
+    const [{ docs, total, sections, sources }, stats] = await Promise.all([
       withDb(async (m) => {
         const col = m.collection("articles");
-        const [docs, total, sections] = await Promise.all([
-          col.find(filter, { projection: { slug: 1, title: 1, section: 1, status: 1, publishedAt: 1, featured: 1, img: 1 } }).sort({ publishedAt: -1, slug: 1 }).skip(data.offset).limit(data.limit).toArray(),
+        const [docs, total, sections, sources] = await Promise.all([
+          col.find(filter, { projection: { slug: 1, title: 1, section: 1, source_name: 1, status: 1, publishedAt: 1, featured: 1, img: 1 } }).sort({ publishedAt: -1, slug: 1 }).skip(data.offset).limit(data.limit).toArray(),
           col.countDocuments(filter),
           data.offset === 0 ? col.distinct("section") : Promise.resolve(null),
+          data.offset === 0 ? col.distinct("source_name") : Promise.resolve(null),
         ]);
-        return { docs, total, sections: sections ? (sections as unknown[]).filter((x): x is string => typeof x === "string" && !!x).sort() : null };
+        return { docs, total, sections: sections ? (sections as unknown[]).filter((x): x is string => typeof x === "string" && !!x).sort() : null, sources: sources ? (sources as unknown[]).filter((x): x is string => typeof x === "string" && !!x).sort() : null };
       }),
       viewStats(365),
     ]);
     const views = new Map(stats.articles.map((a) => [a.slug, a]));
     const rows = docs.map((d) => ({
       slug: str(d["slug"]), title: str(d["title"]), section: str(d["section"]), status: str(d["status"]) || "published",
-      featured: d["featured"] === true, img: str(d["img"]),
+      source: str(d["source_name"]), featured: d["featured"] === true, img: str(d["img"]),
       publishedAt: d["publishedAt"] instanceof Date ? d["publishedAt"].toISOString() : str(d["publishedAt"]),
       views: views.get(str(d["slug"]))?.views ?? 0, visitors: views.get(str(d["slug"]))?.visitors ?? 0,
     }));
-    return { ...toPage(rows, total, data.offset), sections };
+    return { ...toPage(rows, total, data.offset), sections, sources };
   });
 
 export const adminGetArticle = createServerFn({ method: "GET" })
@@ -171,38 +163,18 @@ export const adminGetArticle = createServerFn({ method: "GET" })
     };
   });
 
-const articleInput = z.object({
-  slug: z.string().min(1).max(300),
-  title: z.string().trim().min(1).max(300),
-  subtitle: z.string().max(500),
-  excerpt: z.string().max(1000),
-  body: z.array(z.string().max(20000)).max(400),
-  summary: z.array(z.string().max(2000)).max(20),
-  section: z.string().max(100),
-  tag: z.string().max(100),
-  img: z.string().max(2000),
-  imageAlt: z.string().max(300),
-  featured: z.boolean(),
-  headlineWeight: z.number().min(0).max(100),
-});
-
 export const adminSaveArticle = createServerFn({ method: "POST" })
   .inputValidator((d) => articleInput.parse(d))
   .handler(async ({ data }) => {
     const { requireAdmin, audit } = await srv();
     const me = await requireAdmin("editor");
     const { withDb } = await import("./community.server");
-    const { slug, ...fields } = data;
+    const { slug } = data;
     const r = await withDb(async (m) => {
       const col = m.collection("articles");
-      const prev = await col.findOne({ slug }, { projection: { section: 1, sections: 1 } });
+      const prev = await col.findOne({ slug }, { projection: { section: 1, sections: 1, body: 1 } });
       if (!prev) return { matchedCount: 0 };
-      const extra: Record<string, unknown> = {};
-      if (str(prev["section"]) !== fields.section) {
-        const old = Array.isArray(prev["sections"]) ? (prev["sections"] as unknown[]).filter((x): x is string => typeof x === "string") : [str(prev["section"])];
-        extra["sections"] = [fields.section, ...old.filter((s) => s && s !== fields.section)].slice(0, 3);
-      }
-      return col.updateOne({ slug }, { $set: { ...fields, ...extra, body: fields.body.filter((p) => p.trim()), summary: fields.summary.filter((p) => p.trim()), updatedAt: new Date().toISOString() } });
+      return col.updateOne({ slug }, { $set: articleEditFields(data, { section: prev["section"], sections: prev["sections"], body: prev["body"] }) });
     });
     if (!r.matchedCount) throw new Error("That story no longer exists");
     await clearCaches();
@@ -216,10 +188,34 @@ export const adminSetArticleStatus = createServerFn({ method: "POST" })
     const { requireAdmin, audit } = await srv();
     const me = await requireAdmin("editor");
     const { withDb } = await import("./community.server");
-    await withDb((m) => m.collection("articles").updateOne({ slug: data.slug }, { $set: { status: data.status, updatedAt: new Date().toISOString() } }));
+    const r = await withDb((m) => m.collection("articles").updateOne({ slug: data.slug }, { $set: { status: data.status, updatedAt: new Date().toISOString() } }));
+    if (!r.matchedCount) throw new Error("That story no longer exists");
     await clearCaches();
     await audit(me, data.status === "paused" ? "article_paused" : "article_published", { slug: data.slug });
     return { ok: true };
+  });
+
+export const adminBulkArticles = createServerFn({ method: "POST" })
+  .inputValidator((d) => articleBulkInput.parse(d))
+  .handler(async ({ data }) => {
+    const { requireAdmin, audit } = await srv();
+    const me = await requireAdmin("editor");
+    const { withDb } = await import("./community.server");
+    const slugs = [...new Set(data.slugs)];
+    const count = await withDb(async (m) => {
+      const col = m.collection("articles");
+      const filter = selectedArticleFilter(slugs);
+      if (data.action === "delete") {
+        return (await col.deleteMany(filter)).deletedCount;
+      }
+      const fields = data.action === "publish" || data.action === "pause"
+        ? { status: publicationStatus.parse(data.action === "publish" ? "published" : "paused") }
+        : { featured: data.action === "feature" };
+      return (await col.updateMany(filter, { $set: { ...fields, updatedAt: new Date().toISOString() } })).matchedCount;
+    });
+    await clearCaches();
+    await audit(me, data.action === "delete" ? "article_deleted" : data.action === "feature" || data.action === "unfeature" ? "article_featured_changed" : data.action === "pause" ? "article_paused" : "article_published", { slugs, count });
+    return { ok: true, count };
   });
 
 /* ---------- Comments ---------- */
@@ -419,7 +415,7 @@ export const adminSecurity = createServerFn({ method: "GET" }).handler(async () 
 /* ---------- Activity: what the team did, and what readers did ---------- */
 
 export const ADMIN_ACTIONS = [
-  "login", "login_failed", "logout", "article_edited", "article_paused", "article_published", "comment_removed",
+  "login", "login_failed", "logout", "article_edited", "article_paused", "article_published", "article_deleted", "article_featured_changed", "comment_removed",
   "member_blocked", "member_unblocked", "member_deleted", "settings_changed", "session_revoked", "all_sessions_revoked",
   "editor_added", "editor_updated", "editor_removed", "account_updated",
 ] as const;

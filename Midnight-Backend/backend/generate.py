@@ -37,6 +37,7 @@ from config import check_key_or_exit
 from sources import interleaved, site_of
 from scraper import fetch_feed_entries, hydrate_entry
 from rewriter import rewrite_article
+import images as image_guard
 from images import NoVerifiedImage
 from quality import Incomplete, final_gate
 from dedupe import SeenIndex
@@ -123,9 +124,13 @@ def process_entry(entry, section_slug, storage, seen, dry_run=False, monitor=Non
     rewrite = rewrite or rewrite_article
     verify = verify or factcheck.verify
     mon.emit("fetching", f"Reading {entry['source']}: {entry['title'][:80]}", source=entry["source"])
+    if not dry_run:
+        image_guard.use_database(storage.db)   # lets the generic-image guard see what is already published
     hydrate_entry(entry)                       # raises NoVerifiedImage
-    if len(entry.get("text", "")) < MIN_SOURCE_CHARS:
-        raise ThinSource("source text too thin to write an honest article")
+    text = entry.get("text", "")
+    n_words, need = len(text.split()), config.source_settings()["min_words"]
+    if len(text) < MIN_SOURCE_CHARS or n_words < need:
+        raise ThinSource(f"source text too thin to write an honest article ({n_words} words of real text, need {need})")
     mon.emit("image_ok", f"Image verified for {entry['source']}", img=entry["images"][0])
     mon.emit("writing", f"Writing: {entry['title'][:80]}", source=entry["source"])
     post = rewrite(entry)                      # raises Incomplete / llm errors
@@ -167,6 +172,7 @@ def process_entry(entry, section_slug, storage, seen, dry_run=False, monitor=Non
     final_gate(article)
     if not dry_run:
         storage.publish_article(article)       # live push to MongoDB
+        image_guard.record_use(entry.get("image_fp"), article["img"], entry["source"], article["id"])
         headlines.HeadlineBook(storage.db).record_article(
             article["id"], primary, entry["source"], post.get("importance"))
     return article

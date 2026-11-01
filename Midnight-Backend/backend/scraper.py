@@ -22,6 +22,8 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from boilerplate import strip_boilerplate
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -244,15 +246,17 @@ def hydrate_entry(entry, sleep=time.sleep):
     Raises images.NoVerifiedImage only when that is done. The article is then skipped before any LLM credit is spent.
     """
     import config
-    from images import pick_verified_images, NoVerifiedImage, is_transient
+    from images import pick_verified_images, NoVerifiedImage, is_transient, fingerprint_of
     budget = config.retry_settings()["image_tries"]
-    text = entry.get("text") or ""
+    text = strip_boilerplate(entry.get("text") or "")        # publisher disclaimers are not article text
+    src = entry.get("source")
     candidates = list(entry.get("images", []))
     scraped = False
     if len(text) < 1500 or not candidates:
         time.sleep(POLITE_DELAY)
         full_text, page_imgs = _scrape_html_fallback(entry["url"], entry["source"])
         scraped = True
+        full_text = strip_boilerplate(full_text)
         if full_text and len(full_text) > len(text):
             text = full_text
         for i in page_imgs:
@@ -260,23 +264,24 @@ def hydrate_entry(entry, sleep=time.sleep):
                 candidates.append(i)
     entry["text"] = text
     ref = entry.get("url")
-    good, rejected = pick_verified_images(candidates, limit=3, max_tries=budget, referer=ref)
+    good, rejected = pick_verified_images(candidates, limit=3, max_tries=budget, referer=ref, source=src)
     if not good and not scraped:                               # the feed's images were no good: ask the page itself
         time.sleep(POLITE_DELAY)
         _, page_imgs = _scrape_html_fallback(entry["url"], entry["source"])
         tried = set(candidates)
         fresh = [i for i in page_imgs if i not in tried]
         candidates += fresh
-        good, more = pick_verified_images(fresh, limit=3, max_tries=max(1, budget - len(rejected)), referer=ref)
+        good, more = pick_verified_images(fresh, limit=3, max_tries=max(1, budget - len(rejected)), referer=ref, source=src)
         rejected += more
     if not good:                                               # network-trouble failures get one more look after a pause
         again = [c for c, why in rejected if is_transient(why)][:max(2, budget // 2)]
         if again:
             sleep(3)
-            good, _ = pick_verified_images(again, limit=3, max_tries=len(again), referer=ref)
+            good, _ = pick_verified_images(again, limit=3, max_tries=len(again), referer=ref, source=src)
     if not good:
         why = "; ".join(f"{u.split('/')[-1][:30]}: {w}" for u, w in rejected[:3]) or "no image found"
         raise NoVerifiedImage(f"no verifiable image after {len(rejected)} candidate(s) ({why})",
                               transient=bool(rejected) and all(is_transient(w) for _, w in rejected))
     entry["images"] = good
+    entry["image_fp"] = fingerprint_of(good[0])                # recorded when the article is published (images.GUARD)
     return entry

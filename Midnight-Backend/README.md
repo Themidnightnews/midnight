@@ -244,3 +244,28 @@ The new `sections` field is rejected by the old strict schema.
 
 * `SCRAPE_MAX_AGE_DAYS` - how far back feed items are read. Default `183` (six months) for the bulk scrape; set it to `1` afterwards so only the last day is picked up.
 * `PUBLISHED_AT_MODE` - `source` (default, exactly as before) keeps each story's own original publish time in `publishedAt`; `own` stamps stories with our own publishing time instead. Switch to `own` after the bulk scrape.
+
+## Generic pictures and stub articles
+
+* **Generic-image guard** (`images.py`). Every accepted hero image gets a perceptual fingerprint (dHash). A picture is
+  refused when it is known placeholder art (`KNOWN_GENERIC`, currently NPR's headphones artwork), when the same outlet
+  already used that exact picture on another article (`IMAGE_MAX_REUSE_SAME_SOURCE`, default 1), or when it is already on
+  `IMAGE_MAX_REUSE_ANY` (default 3) published articles. Refused pictures fall through to the next candidate on the page;
+  no real picture = the story is skipped before any LLM credit is spent. Used pictures are remembered in the
+  `imageFingerprints` collection. Add more placeholder art to `KNOWN_GENERIC` (use `images.dhash`).
+* **Boilerplate stripped** (`boilerplate.py`). Publisher disclaimers (NPR's "does not offer or accept money..."),
+  transcript notices, newsletter/social prompts and copyright lines are removed from the source text before it is counted
+  or written about. `MIN_SOURCE_WORDS` (default 90) real words are then required, so audio-only teasers are skipped.
+* **Fix what is already published:** `python fix_generic_images.py` (dry run), then
+  `python fix_generic_images.py --go --unpublish --trends`. It swaps placeholder pictures for the real one from the
+  article page and drafts items that have none.
+
+## Collecting Groq keys from your own accounts (`backend/get_groq_keys.py`)
+
+`pip install selenium`, copy `emails.txt.example` to `emails.txt` (your addresses, one per line), then
+`python get_groq_keys.py`. It opens clean Chrome windows (5 at a time, `--batch`), goes to the Groq sign-up page, types each
+address and clicks Continue. You then open each verification email and paste its link into the terminal (or type the code
+into that window and press Enter): about 10 seconds per account. The script does not read inboxes or get around Groq's
+email check. After that it creates the key, captures it and saves it to `groq_keys.csv`; the line to paste into
+`backend/.env` is written to `groq_api_keys.txt`. If a button is not found, do that step by hand in the open window and the
+key is still picked up. Re-running skips addresses that already have a key. Both files are git-ignored.
