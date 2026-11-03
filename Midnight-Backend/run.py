@@ -18,6 +18,10 @@ Optional:
     python run.py --live            keep publishing new articles to MongoDB in the background,
                                     AND run the Midnight Trends loop (Google Trends) in parallel
     python run.py --live --no-trends   news only
+    python run.py --live --no-watchdog start the loops directly, without the watchdog (old behaviour)
+
+With --live the loops are started and kept alive by backend/watchdog.py, an independent service that restarts a
+loop that crashed, froze or stopped making progress. You can also run it on its own:  python watchdog.py
 """
 
 import argparse
@@ -173,6 +177,8 @@ def main():
                         help="Keep the pipeline running in the background, pushing each new article to MongoDB")
     parser.add_argument("--no-trends", action="store_true",
                         help="With --live: do not start the Midnight Trends loop (generate_trends.py)")
+    parser.add_argument("--no-watchdog", action="store_true",
+                        help="With --live: start the loops directly instead of through the watchdog")
     args = parser.parse_args()
 
     setup_backend()
@@ -186,17 +192,17 @@ def main():
         if r.returncode != 0:
             log("Generation had errors — starting the app anyway.")
 
-    pipeline = None
-    if args.live:
+    pipeline = trends = watchdog = None
+    if args.live and not args.no_watchdog:
+        cmd = [PY, "watchdog.py"] + (["--only", "news"] if args.no_trends else [])
+        log("Starting the watchdog: it starts the live loops and restarts them whenever one stops, freezes or stalls...")
+        watchdog = subprocess.Popen(cmd, cwd=BACKEND, stdin=subprocess.DEVNULL)
+    elif args.live:
         log("Starting the live pipeline in the background (Ctrl+C stops it too)...")
-        pipeline = subprocess.Popen([PY, "generate.py", "--forever"], cwd=BACKEND,
-                                    stdin=subprocess.DEVNULL)
-
-    trends = None
-    if args.live and not args.no_trends:
-        log("Starting the Midnight Trends loop in the background (independent of the news loop)...")
-        trends = subprocess.Popen([PY, "generate_trends.py", "--forever"], cwd=BACKEND,
-                                  stdin=subprocess.DEVNULL)
+        pipeline = subprocess.Popen([PY, "generate.py", "--forever"], cwd=BACKEND, stdin=subprocess.DEVNULL)
+        if not args.no_trends:
+            log("Starting the Midnight Trends loop in the background (independent of the news loop)...")
+            trends = subprocess.Popen([PY, "generate_trends.py", "--forever"], cwd=BACKEND, stdin=subprocess.DEVNULL)
 
     backend_port = find_free_port(BACKEND_PORT)
     frontend_port = find_free_port(FRONTEND_PORT)
@@ -224,6 +230,9 @@ def main():
             for p in procs:
                 if p.poll() is not None:
                     raise KeyboardInterrupt
+            if watchdog is not None and watchdog.poll() is not None:
+                log(f"The watchdog stopped (exit code {watchdog.returncode}); restarting it.")
+                watchdog = subprocess.Popen(watchdog.args, cwd=BACKEND, stdin=subprocess.DEVNULL)
             if pipeline is not None and pipeline.poll() is not None:
                 # The pipeline stopping (e.g. bad API key) must NOT take the dashboard down with it.
                 log(f"The pipeline stopped (exit code {pipeline.returncode}). Read its message above. "
@@ -236,6 +245,8 @@ def main():
                 trends = None
     except KeyboardInterrupt:
         log("Shutting down...")
+        if watchdog is not None:
+            procs.append(watchdog)
         if pipeline is not None:
             procs.append(pipeline)
         if trends is not None:

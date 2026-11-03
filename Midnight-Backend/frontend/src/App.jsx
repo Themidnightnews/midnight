@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, ChevronsLeft, ChevronsRight, FileText, Globe, KeyRound, Menu, Newspaper, TrendingUp, X } from "lucide-react";
+import { Activity, AlertTriangle, Ban, ChevronsLeft, ChevronsRight, FileText, Globe, KeyRound, Menu, Newspaper, TrendingUp, X } from "lucide-react";
 import { ColorGlow } from "./components/ui.jsx";
 import { useThemeMode } from "./components/theme.jsx";
 import Live from "./pages/Live.jsx";
@@ -8,12 +8,17 @@ import Reports from "./pages/Reports.jsx";
 import Trends from "./pages/Trends.jsx";
 import Sources from "./pages/Sources.jsx";
 import Keys from "./pages/Keys.jsx";
+import Review from "./pages/Review.jsx";
+const Skipped = () => <Review kind="skipped" />;
+const Failed = () => <Review kind="failed" />;
 
 const TABS = [
   { id: "live", label: "Live activity", icon: Activity, view: Live },
   { id: "articles", label: "Published articles", icon: Newspaper, view: Articles },
   { id: "reports", label: "Midnight Reports", icon: FileText, view: Reports },
   { id: "trends", label: "Midnight Trends", icon: TrendingUp, view: Trends },
+  { id: "skipped", label: "Skipped", icon: Ban, view: Skipped },
+  { id: "failed", label: "Failed", icon: AlertTriangle, view: Failed },
   { id: "sources", label: "Sources", icon: Globe, view: Sources },
   { id: "keys", label: "API keys", icon: KeyRound, view: Keys },
 ];

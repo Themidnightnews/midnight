@@ -44,7 +44,7 @@ function MoreCategories() {
     <PageLock active={open && !byHover} onClose={close} />
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger {...trigger} className="flex items-center gap-1 whitespace-nowrap outline-hidden">
-        More categories <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+        More <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         {...content}
@@ -142,7 +142,7 @@ export function SiteHeader() {
       {/* Invisible copies used to measure natural widths */}
       <div ref={measureRef} aria-hidden className="pointer-events-none invisible absolute -z-10 flex whitespace-nowrap">
         <span data-m="wordmark" className="text-2xl font-extrabold tracking-tight">midnight</span>
-        <span data-m="More" className="flex items-center gap-1 text-[15px] font-medium">More categories <ChevronDown className="h-4 w-4" /></span>
+        <span data-m="More" className="flex items-center gap-1 text-[15px] font-medium">More <ChevronDown className="h-4 w-4" /></span>
         <span data-m="signin" className="px-4 font-medium">Sign in</span>
         <span data-m="searchbar" className="inline-block w-52 xl:w-64" />
         <span data-m="report" className="px-6 font-bold">The Report</span>

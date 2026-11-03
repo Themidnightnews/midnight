@@ -300,8 +300,10 @@ header:hover .animate-nav-strip { animation-play-state: paused; }
 /* Curved edges: the strip clips scrolled pills to a full-height pill-shaped cap at both ends. */
 .pill-scroll-curved { border-radius: 999px; }
 
-.clamp-title { display: block; overflow: hidden; max-height: calc(3 * 1.375em); }
-.clamp-title > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; transition: transform 0.4s ease; }
+.clamp-title { --title-lines: 3; display: block; overflow: hidden; max-height: calc(var(--title-lines) * 1.375em); overflow-wrap: anywhere; }
+.clamp-title-2 { --title-lines: 2; }
+.clamp-title-4 { --title-lines: 4; }
+.clamp-title > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--title-lines); overflow: hidden; transition: transform 0.4s ease; }
 .group:hover .clamp-title > span { display: block; -webkit-line-clamp: unset; transform: translateY(var(--vshift, 0)); transition: transform var(--vdur, 2s) linear 0.3s; }
 @media (prefers-reduced-motion: reduce) { .group:hover .clamp-title > span { transform: none; } }
 .pill-soft {

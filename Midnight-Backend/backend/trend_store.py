@@ -14,6 +14,7 @@ in its own collections, so trends and articles never mix:
 
 import math
 import os
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -36,6 +37,14 @@ TREND_INDEXES = [  # mirrors lovable/src/lib/mongodb/indexes.ts
 RETRY_HOURS = (1, 3, 8)        # wait before retry 1, 2, 3 of a trend that could not be written yet
 
 
+def _first_url(news):
+    for n in news or []:
+        u = n.get("url") if isinstance(n, dict) else n
+        if isinstance(u, str) and u.startswith("http"):
+            return u
+    return None
+
+
 def _public(d):
     if d:
         d.pop("_id", None)
@@ -44,6 +53,7 @@ def _public(d):
 
 class TrendMonitor(Monitor):
     """Same behaviour as the news monitor but with its own events collection and state document."""
+    state_id = "trends"
 
     def __init__(self, db):
         super().__init__(db)
@@ -52,18 +62,6 @@ class TrendMonitor(Monitor):
             self.events.create_index("at", name="trend_event_expiry", expireAfterSeconds=KEEP_DAYS * 86400)
         except Exception:
             pass
-
-    def set_state(self, **fields):
-        fields["heartbeat"] = now_iso()
-        fields["pid"] = os.getpid()
-        try:
-            with self._lock:
-                self.state.update_one({"_id": "trends"}, {"$set": fields}, upsert=True)
-        except Exception:
-            pass
-
-    def get_state(self):
-        return self.state.find_one({"_id": "trends"}) or {}
 
 
 class TrendSeen:
@@ -138,8 +136,15 @@ class TrendStore:
     def get(self, key):
         return _public(self.ledger.find_one({"key": key}))
 
-    def set_status(self, key, status, reason=None, **fields):
-        self.ledger.update_one({"key": key}, {"$set": {"status": status, "reason": reason, "updatedAt": now_iso(), **fields}})
+    def set_status(self, key, status, reason=None, kind=None, **fields):
+        """kind: how this event counts on the dashboard: 'skipped' (decided against it) or 'failed' (could not be
+        written, e.g. API trouble). Every event is kept in `history` with its reason."""
+        now = now_iso()
+        upd = {"$set": {"status": status, "reason": reason, "updatedAt": now, **fields}}
+        if status != "seen":
+            upd["$push"] = {"history": {"$each": [{"at": now, "status": status, "kind": kind or status, "reason": reason,
+                                                   "attempt": fields.get("attempts")}], "$slice": -25}}
+        self.ledger.update_one({"key": key}, upd)
 
     def defer(self, key, reason):
         """Could not be written yet (thin sources, no image, API trouble). Retry later; after
@@ -147,10 +152,10 @@ class TrendStore:
         e = self.ledger.find_one({"key": key}) or {}
         attempts = int(e.get("attempts") or 0) + 1
         if attempts >= self.max_attempts:
-            self.set_status(key, "skipped", f"gave up after {attempts} tries: {reason}", attempts=attempts, nextTryAt=None)
+            self.set_status(key, "skipped", f"gave up after {attempts} tries: {reason}", kind="failed", attempts=attempts, nextTryAt=None)
             return "skipped"
         wait = RETRY_HOURS[min(attempts - 1, len(RETRY_HOURS) - 1)]
-        self.set_status(key, "pending", reason, attempts=attempts,
+        self.set_status(key, "pending", reason, kind="failed", attempts=attempts,
                         nextTryAt=iso(datetime.now(timezone.utc) + timedelta(hours=wait)))
         return "pending"
 
@@ -178,6 +183,45 @@ class TrendStore:
         for r in self.ledger.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]):
             out[r["_id"]] = r["n"]
         return out
+
+    def outcome_of(self, d):
+        """published | retrying | abandoned | queued: the final outcome of a trend ledger row."""
+        st = d.get("status")
+        if st == "published":
+            return "published"
+        if st == "seen":
+            return "queued"
+        if st == "pending" or (st == "failed" and int(d.get("attempts") or 0) < self.max_attempts):
+            return "retrying"
+        return "abandoned"
+
+    def review(self, kind, outcome=None, search=None, offset=0, limit=50):
+        """Every trend that was ever skipped (decided against) or failed (could not be written), with all reasons,
+        the tries and the final outcome: published later / will retry / abandoned."""
+        from review import describe, reasons_from
+        conds = [{"history.kind": kind}, {"status": kind}] if kind == "skipped" else \
+                [{"history.kind": kind}, {"status": {"$in": ["pending", "failed"]}}]
+        q = {"$or": conds}
+        if search:
+            rx = {"$regex": re.escape(search), "$options": "i"}
+            q = {"$and": [q, {"$or": [{"query": rx}, {"reason": rx}]}]}
+        rows = [_public(d) for d in self.ledger.find(q).sort("updatedAt", DESCENDING).limit(5000)]
+        items, counts = [], {"published": 0, "retrying": 0, "abandoned": 0}
+        for d in rows:
+            o = self.outcome_of(d)
+            counts[o] = counts.get(o, 0) + 1
+            if outcome and o != outcome:
+                continue
+            reasons = reasons_from(d.get("history"), d.get("reason"), d.get("status"), d.get("updatedAt"), kinds=(kind,))
+            items.append({"title": d.get("query"), "url": _first_url(d.get("news")),
+                          "source": ", ".join(d.get("geos") or [])[:60], "snippet": d.get("trafficLabel"),
+                          "status": d.get("status"), "reason": d.get("reason") or (reasons[-1]["reason"] if reasons else None),
+                          "reasons": reasons, "attempts": int(d.get("attempts") or 0), "maxAttempts": self.max_attempts,
+                          "firstSeenAt": d.get("firstSeenAt"), "lastAt": d.get("updatedAt") or d.get("lastSeenAt"),
+                          "outcome": o, "nextTryAt": d.get("nextTryAt"), "articleId": d.get("trendId"),
+                          "articleTitle": d.get("title"),
+                          "outcomeText": describe(o, d.get("attempts"), self.max_attempts, d.get("nextTryAt"), d.get("title"), d.get("reason"))})
+        return {"items": items[offset:offset + limit], "total": len(items), "counts": counts}
 
     def recent_ledger(self, limit=50, status=None):
         q = {"status": status} if status else {}

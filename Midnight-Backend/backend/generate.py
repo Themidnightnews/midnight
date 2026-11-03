@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 import config
 import factcheck
 import llm
+import realcheck
 from config import check_key_or_exit
 from sources import interleaved, site_of
 from scraper import fetch_feed_entries, hydrate_entry
@@ -40,7 +41,7 @@ from rewriter import rewrite_article
 import images as image_guard
 from images import NoVerifiedImage
 from quality import Incomplete, final_gate
-from dedupe import SeenIndex
+from dedupe import SeenIndex, normalise_url
 from schema import build_article, iso, now_iso, resolve_sections, SECTION_BY_SLUG
 from storage import get_storage
 from monitor import Monitor, NullMonitor
@@ -67,6 +68,10 @@ class ThinSource(Skip):
     pass
 
 
+class NotNewsArticle(Skip):
+    """The writer model confirmed the scraped material is not a real news article (a text blob): never retried."""
+
+
 class FailedFactCheck(Skip):
     """The article still contained claims its source does not support after one corrective rewrite."""
 
@@ -84,16 +89,47 @@ def guess_hashtags(title, tag, max_tags=4):
 
 
 class Rotation:
-    """Walks the sources in order, remembering each feed's remaining candidates."""
+    """Walks the sources in order, remembering each feed's remaining candidates.
 
-    def __init__(self, sources, seen, fetch=fetch_feed_entries):
-        self.sources, self.seen, self.fetch = sources, seen, fetch
+    With a `store` (the MongoDB storage) nothing scraped is ever lost: every scraped entry is written to the ledger as
+    'queued' the moment it is scraped, and whenever a feed is read again the entries still waiting (never written, or a
+    retry whose time has come) are put back in its queue, even after a restart or after the story left the feed."""
+
+    def __init__(self, sources, seen, fetch=fetch_feed_entries, store=None):
+        self.sources, self.seen, self.fetch, self.store = sources, seen, fetch, store
         self.queues, self.fetched_at = {}, {}
+        self.holds = {}                      # normalised url -> epoch seconds before which it must not be retried
+        if store is not None:
+            try:
+                now = datetime.now(timezone.utc)
+                for u, at in store.retry_holds().items():
+                    self.holds[u] = time.time() + max(0.0, (datetime.fromisoformat(at.replace("Z", "+00:00")) - now).total_seconds())
+            except Exception:  # noqa: BLE001 - never stop the loop over bookkeeping
+                pass
+
+    def hold_until(self, url, iso_time):
+        try:
+            secs = (datetime.fromisoformat(iso_time.replace("Z", "+00:00")) - datetime.now(timezone.utc)).total_seconds()
+        except Exception:  # noqa: BLE001
+            return
+        self.holds[normalise_url(url)] = time.time() + max(0.0, secs)
 
     def _queue(self, name, url):
         age = time.monotonic() - self.fetched_at.get(url, -1e9)
-        if url not in self.queues or (not self.queues[url] and age > FEED_TTL_SECONDS):
-            self.queues[url] = list(self.fetch(name, url))
+        old = self.queues.get(url)
+        actionable = bool(old) and any(self.holds.get(normalise_url(e["url"]), 0) <= time.time() for e in old)
+        if old is None or (not actionable and age > FEED_TTL_SECONDS):
+            fresh = list(self.fetch(name, url))
+            have = {normalise_url(e["url"]) for e in fresh}
+            queue = fresh + [e for e in (old or []) if normalise_url(e["url"]) not in have]     # waiting retries are kept
+            if self.store is not None:
+                try:
+                    self.store.queue_entries(fresh, url)
+                    owed = [e for e in self.store.due_entries(url) if normalise_url(e["url"]) not in {normalise_url(x["url"]) for x in queue}]
+                    queue = owed + queue
+                except Exception as e:  # noqa: BLE001
+                    print(f"  ! queue bookkeeping for {name}: {type(e).__name__}: {str(e)[:80]}")
+            self.queues[url] = queue
             self.fetched_at[url] = time.monotonic()
         return self.queues[url]
 
@@ -102,17 +138,23 @@ class Rotation:
 
     def next_candidate(self, name, url):
         q = self._queue(name, url)
-        skipped = []
-        while q:
-            e = q.pop(0)
-            if self.seen.has_url(e["url"]):
-                continue
-            match = self.seen.match(e["title"])
-            if match:
-                skipped.append((e, f"same story already covered: \"{match[0][:70]}\"", match[1]))
-                continue
-            return e, skipped
-        return None, skipped
+        skipped, deferred = [], []
+        try:
+            while q:
+                e = q.pop(0)
+                if self.seen.has_url(e["url"]):
+                    continue
+                if self.holds.get(normalise_url(e["url"]), 0) > time.time():
+                    deferred.append(e)           # its retry time has not come: keep it, look at the next one
+                    continue
+                match = self.seen.match(e["title"])
+                if match:
+                    skipped.append((e, f"same story already covered: \"{match[0][:70]}\"", match[1]))
+                    continue
+                return e, skipped
+            return None, skipped
+        finally:
+            q.extend(deferred)
 
 
 def process_entry(entry, section_slug, storage, seen, dry_run=False, monitor=None, rewrite=None, verify=None):
@@ -121,7 +163,13 @@ def process_entry(entry, section_slug, storage, seen, dry_run=False, monitor=Non
     section_slug is only the FALLBACK (the feed's label). The writer model decides the real
     section(s) from the story's content; see schema.resolve_sections."""
     mon = monitor or NullMonitor()
-    rewrite = rewrite or rewrite_article
+    base_rewrite = rewrite or rewrite_article
+
+    def rewrite(*a, **k):
+        try:
+            return base_rewrite(*a, **k)
+        except realcheck.NotNews as n:
+            raise NotNewsArticle(f"not a real news article (writer model): {n}") from n
     verify = verify or factcheck.verify
     mon.emit("fetching", f"Reading {entry['source']}: {entry['title'][:80]}", source=entry["source"])
     if not dry_run:
@@ -224,6 +272,7 @@ def run(count=50, forever=False, interval=300, dry_run=False, storage=None, sour
 
     mon.emit("run_start", f"Pipeline started: {len(sources)} feeds, {n_sites} sites, {len(pool.keys)} key(s)")
     push_state(state="running", currentSource=None, pausedUntil=None, pauseReason=None)
+    mon.start_heartbeat()      # keeps "online" true while one article takes minutes; progressAt still shows a hang
 
     def refresh_heroes():
         if dry_run:
@@ -294,9 +343,25 @@ def run(count=50, forever=False, interval=300, dry_run=False, storage=None, sour
                  else "Cooldown over: trying the keys again")
         push_state(state="running", pausedUntil=None, pauseReason=None)
 
+    def settle(entry, name, section, status, reason, retryable):
+        """Record one skip/failure for good. A retryable one is kept (and held until its retry time); anything else
+        (or one that ran out of tries) becomes covered, so it is never looked at again."""
+        res = {"retrying": False, "attempts": 0, "nextTryAt": None}
+        if not dry_run:
+            res = storage.record(source_name=name, source_url=entry["url"], source_title=entry["title"], section=section,
+                                 status=status, reason=reason, retryable=retryable, snippet=entry.get("text"))
+        elif retryable:
+            res["retrying"] = True
+        if res["retrying"]:
+            if res.get("nextTryAt"):
+                rot.hold_until(entry["url"], res["nextTryAt"])
+        else:
+            seen.add(entry["url"], entry["title"])
+        return res
+
     hold()
     tick_reports()
-    rot = Rotation(sources, seen, fetch)
+    rot = Rotation(sources, seen, fetch, store=None if dry_run else storage)
     consecutive_failures = 0
 
     try:
@@ -336,41 +401,34 @@ def run(count=50, forever=False, interval=300, dry_run=False, storage=None, sour
                         return state["published"]
                     except Skip as e:
                         tries += 1
+                        retry_it = isinstance(e, FailedFactCheck)      # a fresh rewrite may pass another time
+                        res = settle(entry, name, section, "skipped", str(e)[:200], retry_it)
                         state["skipped"] += 1
-                        say(f"  ~ skip [{name}] {entry['title'][:60]} — {e}")
-                        mon.emit("skipped", f"[{name}] {entry['title'][:60]} — {e}", source=name)
-                        if not dry_run:
-                            storage.record(source_name=name, source_url=entry["url"], source_title=entry["title"],
-                                           section=section, status="skipped", reason=str(e)[:200])
-                        seen.add(entry["url"], entry["title"])
+                        say(f"  ~ skip [{name}] {entry['title'][:60]} — {e}" + (" (will retry)" if res["retrying"] else ""))
+                        mon.emit("skipped", f"[{name}] {entry['title'][:60]} — {e}" + (" (will retry)" if res["retrying"] else ""),
+                                 source=name)
                         continue
                     except NoVerifiedImage as e:
                         tries += 1
                         transient = getattr(e, "transient", False)
                         # Only network trouble (timeouts, 5xx): not the story's fault, so it is recorded as a failure
-                        # (retried on a later pass) and NOT remembered as covered. A genuinely bad image skips for good.
+                        # and retried later. A genuinely bad image skips for good.
+                        res = settle(entry, name, section, "failed" if transient else "skipped", str(e)[:200], transient)
                         state["failed" if transient else "skipped"] += 1
                         say(f"  ~ skip [{name}] {entry['title'][:60]} — {e}")
                         mon.emit("failed" if transient else "skipped",
-                                 f"[{name}] no verified image{' (network trouble, will retry later)' if transient else ''}: {entry['title'][:60]}",
+                                 f"[{name}] no verified image{' (network trouble, will retry later)' if res['retrying'] else ''}: {entry['title'][:60]}",
                                  source=name, reason=str(e)[:200], level="warn" if transient else "info")
-                        if not dry_run:
-                            storage.record(source_name=name, source_url=entry["url"], source_title=entry["title"],
-                                           section=section, status="failed" if transient else "skipped", reason=str(e)[:200])
-                        if not transient:
-                            seen.add(entry["url"], entry["title"])
                         continue
                     except Exception as e:  # Incomplete, LLMError, network, anything else
                         tries += 1
                         consecutive_failures += 1
-                        state["failed"] += 1
                         kind = "incomplete" if isinstance(e, Incomplete) else type(e).__name__
+                        res = settle(entry, name, section, "failed", f"{kind}: {str(e)[:200]}", True)
+                        state["failed"] += 1
                         say(f"  ! fail [{name}] {entry['title'][:60]}: {kind}: {str(e)[:120]}")
-                        mon.emit("failed", f"[{name}] {entry['title'][:60]} — {kind}: {str(e)[:120]}",
-                                 level="error", source=name)
-                        if not dry_run:
-                            storage.record(source_name=name, source_url=entry["url"], source_title=entry["title"],
-                                           section=section, status="failed", reason=f"{kind}: {str(e)[:200]}")
+                        mon.emit("failed", f"[{name}] {entry['title'][:60]} — {kind}: {str(e)[:120]}" +
+                                 (" (will retry)" if res["retrying"] else " (given up)"), level="error", source=name)
                         if consecutive_failures >= 8 and state["published"] == 0:
                             say("Aborting: 8 failures in a row with nothing published. Check the errors above.")
                             push_state(state="stopped", pauseReason="8 failures in a row")

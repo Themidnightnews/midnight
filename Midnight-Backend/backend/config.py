@@ -66,11 +66,49 @@ def get_groq_model():
     return env("GROQ_MODEL", "openai/gpt-oss-120b")
 
 
-def key_pause_seconds():
+MAX_WAIT_SECONDS = 900   # no cooldown, pause or retry wait anywhere is ever longer than 15 minutes
+
+
+def max_wait_seconds():
+    """Upper limit for every cooldown / pause / retry wait (MAX_WAIT_MINUTES, default 15, never above 15)."""
     try:
-        return int(float(env("KEY_PAUSE_HOURS", "0.25")) * 3600)
+        v = int(float(env("MAX_WAIT_MINUTES", "15")) * 60)
     except ValueError:
-        return 900
+        v = MAX_WAIT_SECONDS
+    return max(30, min(v, MAX_WAIT_SECONDS))
+
+
+def key_pause_seconds():
+    """Wait when every key is out of credit. KEY_PAUSE_HOURS (default 0.25 = 15 min), capped at 15 minutes."""
+    try:
+        v = int(float(env("KEY_PAUSE_HOURS", "0.25")) * 3600)
+    except ValueError:
+        v = MAX_WAIT_SECONDS
+    return max(30, min(v, max_wait_seconds()))
+
+
+def item_retry_settings():
+    """How often a skipped/failed story is looked at again before it is abandoned for good.
+      ITEM_MAX_ATTEMPTS  total tries per article that failed for a retryable reason (default 5, 2..10)
+    Waits between tries are 15 min, 30 min, 1 h, 2 h, 4 h (storage.RETRY_MINUTES)."""
+    try:
+        n = int(float(env("ITEM_MAX_ATTEMPTS", "5")))
+    except ValueError:
+        n = 5
+    return {"max_attempts": max(2, min(10, n))}
+
+
+def watchdog_settings():
+    """WATCHDOG_STALE_MINUTES: a loop whose progress has not moved for this long is considered hung and is restarted
+    (default 20, minimum 16 because a cooldown may last 15). WATCHDOG_CHECK_SECONDS: how often the watchdog looks."""
+    def num(name, default, lo, hi):
+        try:
+            v = int(float(env(name, str(default))))
+        except ValueError:
+            v = default
+        return max(lo, min(hi, v))
+    return {"stale_seconds": num("WATCHDOG_STALE_MINUTES", 20, 16, 240) * 60,
+            "check_seconds": num("WATCHDOG_CHECK_SECONDS", 30, 10, 300)}
 
 
 def get_mongo_uri():

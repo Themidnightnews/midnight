@@ -145,7 +145,7 @@ def test_rewriter_returns_the_models_sections_and_tells_it_the_menu():
         seen.update(prompt=prompt, temperature=temperature)
         body = "<p>" + "Chelsea won on penalties at Anfield. " * 30 + "</p>" * 1
         body = "".join(f"<p>{'Chelsea won on penalties at Anfield. ' * 8}</p>" for _ in range(4))
-        return llm.ChatResult("TITLE: Chelsea win a League Cup shootout at Anfield\nEXCERPT: Chelsea won the shootout 6-5 at Anfield in the League Cup.\n"
+        return llm.ChatResult("REAL_NEWS_ARTICLE: yes\nTITLE: Chelsea win a League Cup shootout at Anfield\nEXCERPT: Chelsea won the shootout 6-5 at Anfield in the League Cup.\n"
                               "SUMMARY1: Chelsea won 6-5 on penalties at Anfield.\nSUMMARY2: The tie had finished 1-1 after normal time.\n"
                               "SUMMARY3: Xabi Alonso praised the composure of his players.\nIMPORTANCE: 40\nSECTIONS: sport, europe\n"
                               f"BODY:\n{body}\n===END===", "stop")

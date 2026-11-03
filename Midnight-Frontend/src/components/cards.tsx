@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
-import { ClampTitle, IconTip, ScrollTitle } from "@/components/news-bits";
+import { ClampTitle, IconTip } from "@/components/news-bits";
 import { canonicalStory, formatPublished, getArticle, slugify } from "@/data/news";
 
 type Card = { img: string; tag: string; title: string; time: string };
@@ -35,7 +35,7 @@ export function BigCard({ s: story }: { s: Card }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-5">
         <span className="glass inline-block rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase">{s.tag}</span>
-        <h3 className="mt-3 text-xl leading-snug font-extrabold text-white"><ClampTitle text={s.title} /></h3>
+        <h3 className="mt-3 text-xl leading-snug font-extrabold text-report-foreground"><ClampTitle text={s.title} lines={4} /></h3>
         <p className="mt-2 text-xs text-white/70">{published ? `${published} · ` : ""}{s.time} read</p>
       </div>
     </Link>
@@ -56,12 +56,12 @@ export function ThumbRow({ s: story, ago, tall, large, fill }: { s: Card; ago?: 
   return (
     <Link to="/article/$slug" params={{ slug: article?.slug ?? slugify(s.title) }} className={`glass-card group relative flex items-center gap-3 overflow-hidden rounded-2xl p-2.5 sm:gap-4 sm:p-3 ${tall ? "h-full min-h-28 sm:min-h-36" : fill ? "w-full" : ""}`}>
       <Spill img={s.img} />
-      <div className={`relative shrink-0 overflow-hidden rounded-xl shadow-float ${large ? "h-20 w-28 sm:h-24 sm:w-36" : tall ? "h-full min-h-20 w-24 self-stretch sm:w-36 lg:w-32 xl:w-40" : fill ? "h-14 w-20 sm:h-16 sm:w-24 lg:h-auto lg:min-h-16 lg:self-stretch lg:w-28" : "h-14 w-20 sm:h-16 sm:w-24"}`}>
-        <img src={s.img} alt={s.title} loading="lazy" width={1024} height={1280} className={`h-full w-full object-cover transition duration-700 group-hover:scale-110 ${fill ? "lg:absolute lg:inset-0" : ""}`} />
+      <div className={`relative shrink-0 overflow-hidden rounded-xl shadow-float ${large ? "h-20 w-28 sm:h-24 sm:w-36" : tall ? "min-h-28 w-24 self-stretch sm:w-36 lg:w-32 xl:w-40" : fill ? "min-h-20 w-20 self-stretch sm:min-h-24 sm:w-24 lg:w-28" : "h-20 w-20 sm:h-24 sm:w-24"}`}>
+        <img src={s.img} alt={s.title} loading="lazy" width={1024} height={1280} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-110" />
       </div>
       <div className="relative min-w-0 flex-1">
         <p className="truncate text-[10px] font-bold tracking-wider uppercase text-muted-foreground sm:text-[11px]">{s.tag}</p>
-        <h3 className="mt-0.5 text-sm font-bold sm:text-base"><ScrollTitle text={s.title} /></h3>
+        <h3 className="mt-0.5 text-sm leading-snug font-bold sm:text-base"><ClampTitle text={s.title} lines={tall ? 3 : 2} /></h3>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">{ago ? s.time : `${published ? `${published} · ` : ""}${s.time} read`}</p>
       </div>
       <IconTip label="Read full article">

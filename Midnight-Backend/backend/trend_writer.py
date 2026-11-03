@@ -12,6 +12,7 @@ import random
 import re
 
 import llm
+import realcheck
 from quality import END_MARKER, Incomplete, check_article_text, strip_end_marker
 from rewriter import _clean_body_html
 from trend_schema import HASHTAG_VOCAB, clean_hashtags
@@ -79,6 +80,8 @@ Rules
 - If the material cannot be written about safely or honestly under these rules, reply with ONE line only:
   SKIP: <short reason>
 
+{realcheck.INSTRUCTION}
+
 {instr}
 Formatting: {voice['formatting']}. In the body use only these HTML tags: <p>, <b>, <i>, <strong>, <em>,
 <h3>, <ul>, <li>. Do not use markdown syntax. No <html>/<body> wrappers. Finish every paragraph and end
@@ -90,6 +93,7 @@ for example a team, person, place or event name).
 
 Respond in EXACTLY this format and nothing else, no preamble, no code fences:
 
+{realcheck.FORMAT_LINE}
 TITLE: <the post title, one line, a real headline, not just the search term>
 EXCERPT: <one complete sentence teaser, one line>
 SUMMARY1: <key takeaway 1, one complete sentence>
@@ -138,6 +142,10 @@ def write_trend(trend, material, voice=None, chat=None, feedback=None):
         try:
             if re.match(r"^\s*SKIP:", res.text or "", re.I):
                 raise Unsuitable((res.text or "")[5:].strip()[:200] or "writer declined")
+            try:
+                realcheck.require_flag(res.text)
+            except realcheck.NotNews as nn:
+                raise Unsuitable(f"not a real news article: {nn}") from nn
             raw = strip_end_marker(res.text, res.finish_reason)
             title, excerpt, summary, tags, html = parse(raw)
             check_article_text(title, excerpt, summary, html, min_body)

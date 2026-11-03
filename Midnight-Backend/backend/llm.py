@@ -4,11 +4,11 @@ Groq access with automatic key rotation.
   * Any number of keys. The current key is used until it fails, then the next. With 2+ keys one is kept
     back for the Midnight Report (see KeyPool).
   * A key that is rate-limited / out of credit is put on cooldown (until the
-    server's Retry-After, or 1h if not given; 2h if the error mentions
-    quota/credit/billing) and skipped.
+    server's Retry-After, or 1 min if not given; 15 min if the error mentions
+    quota/credit) and skipped. No cooldown is ever longer than 15 minutes.
   * A key that is rejected (401/403) is disabled until restart.
   * When EVERY key is unavailable, AllKeysExhausted is raised. The pipeline
-    then pauses (default 2 hours), clears the cooldowns, and tries again from
+    then pauses (at most 15 minutes), clears the cooldowns, and tries again from
     the first key. It never keeps hammering the API.
   * chat() returns the text AND the finish_reason, so callers can refuse
     answers that were cut off.
@@ -23,7 +23,7 @@ import config
 
 DEFAULT_COOLDOWN = 60          # rate limited, server gave no Retry-After: a per-minute limit clears fast
 QUOTA_COOLDOWN = 900            # 15 minutes
-MAX_COOLDOWN = 24 * 3600
+MAX_COOLDOWN = 900             # never wait longer than 15 minutes on one key (config.max_wait_seconds)
 SHORT_WAIT = 120               # every key is cooling down but one is ready within this many seconds: just wait
 
 # Only these mean the account is really out of money/credit. NOT "billing" or "credit" on their own:
@@ -174,7 +174,7 @@ class KeyPool:
 
     @_locked
     def cooldown(self, k, seconds, why):
-        seconds = max(5.0, min(float(seconds), MAX_COOLDOWN))
+        seconds = max(5.0, min(float(seconds), MAX_COOLDOWN, config.max_wait_seconds()))
         k["status"], k["until"], k["error"] = "cooldown", self.clock() + seconds, why[:160]
         shown = f"{int(seconds // 60)} min" if seconds >= 90 else f"{int(seconds)} s"
         self.on_event("key_cooldown", f"{k['label']} unavailable for {shown}: {why[:100]}",

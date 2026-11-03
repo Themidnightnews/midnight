@@ -13,17 +13,61 @@ Plus one collection of our own:
 import math
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo import MongoClient, ASCENDING, DESCENDING, UpdateOne
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 import config
-from schema import SECTIONS, SECTION_BY_SLUG, load_sections, validate_article, now_iso, sanitize_html, \
+from schema import iso, SECTIONS, SECTION_BY_SLUG, load_sections, validate_article, now_iso, sanitize_html, \
     html_to_paragraphs, reading_minutes, slugify
 from dedupe import normalise_url
 
-MAX_FAILED_ATTEMPTS = 3
+RETRY_MINUTES = (15, 30, 60, 120, 240)      # wait before retry 1, 2, 3 ... of a story that failed for a retryable reason
+SNIPPET_CHARS = 600
+ENTRY_TEXT_CHARS = 4000
+
+
+def max_attempts():
+    return config.item_retry_settings()["max_attempts"]
+
+
+def outcome_of(doc, cap=None):
+    """The FINAL outcome of an article ledger row, in plain terms:
+       published   it was written and is live (history shows whether it needed several tries)
+       retrying    it will be tried again (see nextTryAt)
+       abandoned   it was skipped / failed for good and will never be retried
+       queued      scraped and waiting for its turn to be written"""
+    cap = cap or max_attempts()
+    st = doc.get("status")
+    if st == "published":
+        return "published"
+    if st == "queued":
+        return "queued"
+    if "retryable" in doc:
+        return "retrying" if doc.get("retryable") and int(doc.get("attempts") or 0) < cap else "abandoned"
+    if st == "failed" and int(doc.get("attempts") or 0) < 3:       # rows written before this field existed
+        return "retrying"
+    return "abandoned"
+
+
+def entry_snapshot(e, feed_url=None):
+    """What must be kept to write this story later even if the feed no longer lists it."""
+    pub = e.get("published_at")
+    return {"title": e.get("title"), "url": e.get("url"), "source": e.get("source"),
+            "text": (e.get("text") or "")[:ENTRY_TEXT_CHARS], "images": list(e.get("images") or [])[:6],
+            "published_at": pub.isoformat() if hasattr(pub, "isoformat") else pub, "feedUrl": feed_url}
+
+
+def entry_from_snapshot(d):
+    pub = d.get("published_at")
+    if isinstance(pub, str):
+        try:
+            pub = datetime.fromisoformat(pub.replace("Z", "+00:00"))
+        except ValueError:
+            pub = None
+    return {"title": d.get("title"), "url": d.get("url"), "source": d.get("source"), "text": d.get("text") or "",
+            "images": list(d.get("images") or []), "published_at": pub}
 
 ARTICLE_INDEXES = [  # mirrors lovable/src/lib/mongodb/indexes.ts
     ("article_id", [("id", ASCENDING)], True),
@@ -40,6 +84,20 @@ def _parse_dt(s):
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+def shape_review(d):
+    """One ledger row as the admin Skipped / Failed pages show it."""
+    from review import describe, reasons_from
+    cap = max_attempts()
+    reasons = reasons_from(d.get("history"), d.get("reason"), d.get("status"), d.get("at"))
+    return {"title": d.get("sourceTitle"), "url": d.get("sourceUrl"), "source": d.get("sourceName"),
+            "section": d.get("section"), "snippet": d.get("snippet"), "status": d.get("status"),
+            "reason": d.get("reason") or (reasons[-1]["reason"] if reasons else None), "reasons": reasons,
+            "attempts": int(d.get("attempts") or 0), "maxAttempts": cap, "firstSeenAt": d.get("firstSeenAt"),
+            "lastAt": d.get("at"), "outcome": d["outcome"], "nextTryAt": d.get("nextTryAt"),
+            "articleId": d.get("articleId"), "articleTitle": d.get("articleTitle"),
+            "outcomeText": describe(d["outcome"], d.get("attempts"), cap, d.get("nextTryAt"), d.get("articleTitle"), d.get("reason"))}
 
 
 def _public(doc):
@@ -116,27 +174,121 @@ class MongoStorage:
 
     # ----------------------------------------------------------- ledger
     def record(self, *, source_name, source_url, source_title, section, status,
-               reason=None, article_id=None, title=None):
-        """Upsert a ledger entry. status: published | skipped | failed."""
+               reason=None, article_id=None, title=None, retryable=False, snippet=None):
+        """Upsert a ledger entry. status: published | skipped | failed.
+        retryable=True: the story is worth another try later (a network error, an unfinished draft, a failed
+        fact-check). It is tried again after RETRY_MINUTES, up to ITEM_MAX_ATTEMPTS times, then abandoned.
+        Every event is appended to `history`, so the dashboard can show every reason it was ever skipped/failed.
+        Returns {"retrying": bool, "attempts": n, "nextTryAt": iso|None, "reason": final reason}."""
         norm = normalise_url(source_url)
         now = now_iso()
+        prev = self.ledger.find_one({"normUrl": norm}, {"attempts": 1}) or {}
+        attempts = int(prev.get("attempts") or 0)
+        cap = max_attempts()
         fields = {"sourceName": source_name, "sourceUrl": source_url, "sourceTitle": source_title,
                   "section": section, "status": status, "reason": reason,
                   "articleId": article_id, "articleTitle": title, "at": now}
-        update = {"$set": fields, "$setOnInsert": {"normUrl": norm, "firstSeenAt": now}}
-        if status == "failed":
-            update["$inc"] = {"attempts": 1}
+        if snippet:
+            fields["snippet"] = snippet[:SNIPPET_CHARS]
+        unset = {}
+        retrying, next_try = False, None
+        if status == "published":
+            fields.update(retryable=False, nextTryAt=None)
+            unset["entry"] = ""
+        else:
+            attempts += 1
+            fields["attempts"] = attempts
+            if retryable and attempts < cap:
+                retrying = True
+                next_try = iso(datetime.now(timezone.utc) + timedelta(minutes=RETRY_MINUTES[min(attempts - 1, len(RETRY_MINUTES) - 1)]))
+            elif retryable:
+                fields["reason"] = reason = f"gave up after {attempts} tries: {reason}"
+            fields.update(retryable=retrying, nextTryAt=next_try)
+            if not retrying:
+                unset["entry"] = ""
+        update = {"$set": fields, "$setOnInsert": {"normUrl": norm, "firstSeenAt": now},
+                  "$push": {"history": {"$each": [{"at": now, "status": status, "reason": reason, "attempt": attempts}],
+                                        "$slice": -25}}}
+        if unset:
+            update["$unset"] = unset
         self.ledger.update_one({"normUrl": norm}, update, upsert=True)
+        return {"retrying": retrying, "attempts": attempts, "nextTryAt": next_try, "reason": reason}
 
-    def load_seen(self, seen, limit=5000):
-        """Seeds a dedupe.SeenIndex with everything already covered."""
+    # ----------------------------------------------- durable queue (nothing scraped is ever lost)
+    def queue_entries(self, entries, feed_url):
+        """Write every scraped feed entry to the ledger as status 'queued' the moment it is scraped, together with
+        the data needed to write it. A story already known to the ledger is left untouched. Survives restarts, crashes,
+        cooldowns and the story dropping off the feed."""
+        ops = []
+        now = now_iso()
+        for e in entries:
+            if not e.get("url") or not e.get("title"):
+                continue
+            ops.append(UpdateOne({"normUrl": normalise_url(e["url"])},
+                                 {"$setOnInsert": {"normUrl": normalise_url(e["url"]), "firstSeenAt": now, "at": now,
+                                                   "sourceName": e.get("source"), "sourceUrl": e["url"],
+                                                   "sourceTitle": e["title"], "status": "queued", "attempts": 0,
+                                                   "reason": None, "snippet": (e.get("text") or "")[:SNIPPET_CHARS],
+                                                   "entry": entry_snapshot(e, feed_url)}},
+                                 upsert=True))
+        if not ops:
+            return 0
+        try:
+            try:
+                self.ledger.bulk_write(ops, ordered=False)
+            except TypeError:                      # a driver/mock without bulk support: one by one
+                for op in ops:
+                    self.ledger.update_one(op._filter, op._doc, upsert=True)
+        except PyMongoError as err:
+            print(f"  ! could not queue scraped entries: {str(err)[:100]}")
+            return 0
+        return len(ops)
+
+    def due_entries(self, feed_url, limit=200):
+        """Stories of this feed that are waiting: never written yet ('queued') or a retry whose time has come.
+        Returns entries ready for the pipeline."""
+        now = now_iso()
+        q = {"entry.feedUrl": feed_url,
+             "$or": [{"status": "queued"}, {"retryable": True, "nextTryAt": {"$lte": now}}]}
+        return [entry_from_snapshot(d["entry"]) for d in
+                self.ledger.find(q).sort("firstSeenAt", ASCENDING).limit(limit) if d.get("entry")]
+
+    def retry_holds(self):
+        """{normalised url: nextTryAt iso} for stories whose retry time has not come yet."""
+        now = now_iso()
+        return {d["normUrl"]: d["nextTryAt"] for d in
+                self.ledger.find({"retryable": True, "nextTryAt": {"$gt": now}}, {"normUrl": 1, "nextTryAt": 1})}
+
+    def load_seen(self, seen, limit=50000):
+        """Seeds a dedupe.SeenIndex with everything already covered (published or abandoned).
+        Queued stories and stories waiting for a retry are NOT covered yet."""
         for e in self.ledger.find({}).sort("at", DESCENDING).limit(limit):
-            if e.get("status") == "failed" and e.get("attempts", 0) < MAX_FAILED_ATTEMPTS:
-                continue  # transient failure: allowed to be retried
+            if e.get("status") == "queued" or outcome_of(e) in ("queued", "retrying"):
+                continue
             seen.add(e.get("sourceUrl"), e.get("sourceTitle"), e.get("articleTitle"), ref=e.get("articleId"))
         for a in self.articles.find({}, {"title": 1, "source_url": 1, "id": 1}).sort("publishedAt", DESCENDING).limit(limit):
             seen.add(a.get("source_url"), a.get("title"), ref=a.get("id"))
         return seen
+
+    # ------------------------------------------------ admin review (Skipped / Failed pages)
+    def review(self, kind, outcome=None, search=None, offset=0, limit=50):
+        """Everything that was ever skipped (kind='skipped') or failed (kind='failed'), with every reason, the number
+        of tries and the FINAL outcome: published later / will retry / abandoned."""
+        q = {"$or": [{"history.status": kind}, {"status": kind}]}
+        if search:
+            q = {"$and": [q, {"$or": [{"sourceTitle": {"$regex": re.escape(search), "$options": "i"}},
+                                      {"sourceName": {"$regex": re.escape(search), "$options": "i"}},
+                                      {"reason": {"$regex": re.escape(search), "$options": "i"}}]}]}
+        rows = [_public(d) for d in self.ledger.find(q).sort("at", DESCENDING).limit(5000)]
+        out, counts = [], {"published": 0, "retrying": 0, "abandoned": 0}
+        for d in rows:
+            d["outcome"] = outcome_of(d)
+            counts[d["outcome"]] = counts.get(d["outcome"], 0) + 1
+            if outcome and d["outcome"] != outcome:
+                continue
+            d.pop("entry", None)
+            out.append(shape_review(d))
+        return {"items": out[offset:offset + limit], "total": len(out), "counts": counts}
 
     def ledger_summary(self):
         out = {}

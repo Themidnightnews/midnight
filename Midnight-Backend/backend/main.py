@@ -197,9 +197,38 @@ def status():
         except ValueError:
             pass
     st["online"] = online
+    st["heartbeatAgeSeconds"] = int(heartbeat_age(st)) if heartbeat_age(st) is not None else None
     st.update(Control(s.db).get("news"))      # desired / retryNonce, so the dashboard can show "pausing..."
     return {"generator": st, "totals": s.ledger_summary(), "articles": s.articles.count_documents({"status": "published"}),
             "reports": s.db["reports"].count_documents({}), "sections": s.section_counts(), "database": s.db.name}
+
+
+@app.get("/api/review/{kind}")
+def review(kind: str, scope: str = "articles", outcome: str = None, search: str = None, offset: int = 0, limit: int = 50):
+    """Admin Skipped / Failed pages. kind: skipped | failed. scope: articles | trends. Each item carries the story,
+    every reason it was skipped/failed, the tries so far and its FINAL outcome (published later / will retry /
+    abandoned for good)."""
+    if kind not in ("skipped", "failed") or scope not in ("articles", "trends"):
+        raise HTTPException(status_code=404, detail="kind is skipped|failed, scope is articles|trends")
+    if outcome not in (None, "", "published", "retrying", "abandoned", "queued"):
+        raise HTTPException(status_code=400, detail="outcome is published|retrying|abandoned")
+    if scope == "trends":
+        from trends_api import _trends
+        store = _trends()
+    else:
+        store = _storage()
+    return store.review(kind, outcome=outcome or None, search=search or None, offset=max(offset, 0), limit=min(max(limit, 1), 200))
+
+
+@app.get("/api/watchdog")
+def watchdog_status():
+    """The independent watchdog: is it running, and what has it restarted lately."""
+    from datetime import datetime, timezone
+    st = _storage().db["systemState"].find_one({"_id": "watchdog"}) or {}
+    st.pop("_id", None)
+    age = heartbeat_age(st)
+    st["online"] = age is not None and age < 120
+    return st
 
 
 @app.get("/api/events")

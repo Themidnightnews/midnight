@@ -16,7 +16,7 @@
 - The full navigation header (SiteHeader) appears only on "/" and "/section/*"; every other route uses the independent CompactHeader, chosen in __root by pathname. Both consume the existing auth context for account actions, so sign-in state stays consistent.
 - SiteHeader uses CSS mobile visibility alongside width measurement and a separately scrolling category list with a non-scrolling actions footer, so initial rendering and short screens keep navigation usable.
 - Every content route sets a self-referencing relative canonical link; articles also emit NewsArticle and BreadcrumbList JSON-LD so crawlers can follow the site structure.
-- Large photo cards (BigCard, home lead) carry a max height and section lead photos a fixed aspect ratio, so neighbouring lists never stretch them; overflow stories flow below.
+- Photo cards have capped heights and section leads fixed ratios, so lists cannot stretch them. ClampTitle supports matching multiline clip heights; thumbnails contain the full text column.
 - MongoDB document validation and indexes live in src/lib/mongodb; generate mongodb/schema.json from those contracts so database and application shapes cannot drift.
 - MongoDB integration must implement the server-only EditorialRepository contract; do not replace live catalogue reads until credentials, image URLs and deployed connectivity have been verified, to avoid blanking the current site.
 - Content migration is an explicit operator-run export/import, never request-time seeding; preserve existing IDs, slugs, placements and sample provenance so migration does not manufacture real measurements.
@@ -39,3 +39,4 @@
 - Articles and trends share a publication-date picker and UTC matcher but own independent selections; date filtering precedes sorting and resets pagination to keep results consistent with printed publication dates.
 - Admin article filtering and edit validation share admin-articles rules; operator-run status alignment preserves all other live validation rules.
 - Server-authenticated article bulk mutations clear editorial caches and audit slugs; article deletion retains reader history.
+- Homepage Tech, Business and Climate share a photo-row/list layout with category-specific slices to avoid duplicates.

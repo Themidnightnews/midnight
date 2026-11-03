@@ -47,6 +47,7 @@ def status():
         except ValueError:
             pass
     st["online"] = online
+    st["heartbeatAgeSeconds"] = int((datetime.now(timezone.utc) - datetime.fromisoformat(hb.replace("Z", "+00:00"))).total_seconds()) if hb else None
     st.update(Control(s.db).get("trends"))    # desired / retryNonce, so the dashboard can show "pausing..."
     return {"generator": st, "totals": s.ledger_summary(), "trends": s.trends.count_documents({"status": "published"}),
             "hashtags": s.hashtag_counts()}

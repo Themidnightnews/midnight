@@ -111,6 +111,29 @@ SOURCES = [
 ]
 
 
+# ---- the full list: the original feeds plus sources_extra.EXTRA (400 more feeds, ~390 more sites) -------------
+from sources_extra import EXTRA  # noqa: E402
+
+_have = {u for _, u, _ in SOURCES}
+ALL_SOURCES = SOURCES + [s for s in EXTRA if s[1] not in _have]
+
+
+def _disabled():
+    """Feeds listed in sources_disabled.txt (one URL per line, # comments allowed) are skipped. Written by
+    `python check_feeds.py --disable-dead`; edit by hand freely."""
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sources_disabled.txt")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {ln.split("#")[0].strip() for ln in f if ln.split("#")[0].strip()}
+    except OSError:
+        return set()
+
+
+_off = _disabled()
+SOURCES = [s for s in ALL_SOURCES if s[1] not in _off]     # what the pipeline actually reads
+
+
 def site_of(name: str) -> str:
     """'The Guardian World' -> 'The Guardian'. Used only for counting sites."""
     for prefix in ("The Guardian", "BBC", "NYT", "NPR", "ABC News"):

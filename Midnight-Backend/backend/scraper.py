@@ -282,6 +282,18 @@ def hydrate_entry(entry, sleep=time.sleep):
         why = "; ".join(f"{u.split('/')[-1][:30]}: {w}" for u, w in rejected[:3]) or "no image found"
         raise NoVerifiedImage(f"no verifiable image after {len(rejected)} candidate(s) ({why})",
                               transient=bool(rejected) and all(is_transient(w) for _, w in rejected))
+    import watermarks
+    if watermarks.is_watermarked(entry.get("url") or ""):
+        from images import hamming, NEAR_BITS
+
+        def distinct(a, b):
+            fa, fb = fingerprint_of(a), fingerprint_of(b)
+            return not (fa and fb and hamming(fa, fb) <= NEAR_BITS)
+        if len(good) < 2:                          # only one picture so far: look for a second one
+            more = [c for c in candidates if c not in good and c not in {r[0] for r in rejected}]
+            extra, _ = pick_verified_images(more, limit=2, max_tries=max(2, budget // 2), referer=ref, source=src)
+            good = good + [g for g in extra if g not in good]
+        good = watermarks.prefer_second(good, distinct)
     entry["images"] = good
     entry["image_fp"] = fingerprint_of(good[0])                # recorded when the article is published (images.GUARD)
     return entry

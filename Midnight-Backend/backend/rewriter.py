@@ -12,6 +12,7 @@ import re
 
 import llm
 from schema import SECTIONS
+import realcheck
 from quality import Incomplete, strip_end_marker, check_article_text, plain, END_MARKER
 
 VOICES = [
@@ -121,6 +122,8 @@ niche, routine or feature material; 0-9 = trivial. Sports results, entertainment
 lifestyle and product-review pieces are rarely above 40 unless something truly exceptional
 happened. Be strict: most stories should score between 20 and 70.
 
+{realcheck.INSTRUCTION}
+
 SECTIONS: choose where this story belongs on the site, using ONLY the slugs below. Pick 1 to 3,
 most relevant first. Add a second or third only if the story genuinely belongs there too. Judge
 by what the story is ABOUT, not where it was published. Prefer the most specific section: a
@@ -131,6 +134,7 @@ that fit no more specific section.
 Respond in EXACTLY this format and nothing else — no preamble, no code
 fences, no commentary before or after:
 
+{realcheck.FORMAT_LINE}
 TITLE: <the article title, one line>
 EXCERPT: <one complete sentence teaser, one line>
 SUMMARY1: <key takeaway 1, one complete sentence>
@@ -267,6 +271,7 @@ def rewrite_article(article: dict, voice: dict = None, chat=None, feedback=None)
     for attempt in range(config.retry_settings()["write_tries"]):
         res = chat(prompt, max_tokens, temperature=temperature)
         try:
+            realcheck.require_flag(res.text)            # NotNews (not a real article) propagates: skipped for good
             raw = strip_end_marker(res.text, res.finish_reason)
             title, excerpt, summary, html_body, importance = _parse_response(raw)
             check_article_text(title, excerpt, summary, html_body, min_body_chars)

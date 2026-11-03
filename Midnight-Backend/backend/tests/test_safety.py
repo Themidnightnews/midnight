@@ -25,7 +25,7 @@ GOOD_BODY = ("<p>" + "A complete paragraph about the story. " * 12 + "</p>\n") *
 
 def good_reply(title="A perfectly complete headline about it", importance="72"):
     imp = f"IMPORTANCE: {importance}\n" if importance is not None else ""
-    return (f"TITLE: {title}\nEXCERPT: A full teaser sentence that reads as complete.\n"
+    return (f"REAL_NEWS_ARTICLE: yes\nTITLE: {title}\nEXCERPT: A full teaser sentence that reads as complete.\n"
             "SUMMARY1: The first complete takeaway for readers.\nSUMMARY2: The second complete takeaway for readers.\n"
             f"SUMMARY3: The third complete takeaway for readers.\n{imp}BODY:\n{GOOD_BODY}\n===END===")
 

@@ -1,3 +1,12 @@
+# Homepage category layouts (Nov 3)
+- [x] Give Technology a titled big-photo row followed by two untitled Technology card columns; add matching Business and Climate sections beneath it.
+- [x] Verify live category content and section order without changing Latest, World or Politics.
+
+# Article headline sizing (Nov 2)
+- [x] Reduce main photo headline size at all widths and allow an extra line.
+- [x] Allow featured titles three lines, horizontal titles two, and large-photo titles four; keep row text within image height.
+- [x] Verify live stories at phone, medium and large widths (390, 949, 1280, 1536); 18 story checks passed.
+
 # Admin articles (Nov 1)
 - [ ] Diagnose and repair article document validation failures without bypassing validation.
 - [ ] Add confirmed individual/bulk deletion and bulk featured controls; retain other existing bulk actions.

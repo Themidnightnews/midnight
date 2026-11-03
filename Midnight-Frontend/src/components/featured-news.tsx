@@ -56,7 +56,7 @@ function HeroCard({ story }: { story: Article }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
           <span className="glass rounded-full px-3 py-1 text-[11px] font-bold tracking-wider uppercase">{story.tag}</span>
-          <h1 className="mt-4 max-w-2xl text-3xl leading-tight font-extrabold text-white md:text-5xl line-clamp-3">{story.title}</h1>
+          <h1 className="mt-4 max-w-2xl text-2xl leading-tight font-extrabold text-report-foreground md:text-4xl line-clamp-4">{story.title}</h1>
           <p className="mt-3 hidden max-w-xl text-white/80 md:line-clamp-2">{story.excerpt}</p>
           <p className="mt-4 flex items-center gap-2 text-sm text-white/70">{formatPublished(story.publishedAt)} · <Clock className="h-3.5 w-3.5" /> {story.time}</p>
         </div>

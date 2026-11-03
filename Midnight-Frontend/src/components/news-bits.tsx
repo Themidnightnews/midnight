@@ -45,7 +45,7 @@ export function ScrollTitle({ text }: { text: string }) {
   );
 }
 
-export function ClampTitle({ text }: { text: string }) {
+export function ClampTitle({ text, lines = 3 }: { text: string; lines?: 2 | 3 | 4 }) {
   const outer = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = outer.current;
@@ -65,9 +65,9 @@ export function ClampTitle({ text }: { text: string }) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [text]);
+  }, [text, lines]);
   return (
-    <span ref={outer} className="clamp-title relative" title={text}>
+    <span ref={outer} className={`clamp-title clamp-title-${lines} relative`} title={text}>
       <span>{text}</span>
     </span>
   );

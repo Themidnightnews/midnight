@@ -197,7 +197,7 @@ export default function Trends() {
       {g && !g.online && (
         <div className="admin-card flex flex-wrap items-center gap-2 text-sm">
           <Badge tone="bad">Trends loop offline</Badge>
-          No heartbeat{g.heartbeat ? ` since ${ago(g.heartbeat)}` : " yet"}. Press <b>Go live</b> to start it, or run <code className="rounded bg-muted px-1.5 py-0.5">python run.py --live</code> or <code className="rounded bg-muted px-1.5 py-0.5">python generate_trends.py --forever</code>.
+          No heartbeat{g.heartbeat ? ` since ${ago(g.heartbeat)}` : " yet"} (the status is stale, not necessarily the terminal). The watchdog restarts a stopped or frozen loop on its own within a minute or two; or press <b>Go live</b> to start it, or run <code className="rounded bg-muted px-1.5 py-0.5">python run.py --live</code> or <code className="rounded bg-muted px-1.5 py-0.5">python generate_trends.py --forever</code>.
         </div>
       )}
       {g?.online && g.state === "paused" && (

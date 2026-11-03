@@ -101,6 +101,14 @@ def process_trend(trend, store, seen, settings, dry_run=False, mon=None, gather=
     if not good:
         why = "; ".join(f"{u.split('/')[-1][:30]}: {w}" for u, w in rejected[:3]) or "no image found"
         raise Defer(f"no verifiable image ({why})")
+    import watermarks
+    if material["sources"] and watermarks.is_watermarked(material["sources"][0].get("url") or ""):
+        from images import hamming, NEAR_BITS, fingerprint_of as _fp   # logo watermark on the lead picture: use the second one
+
+        def _distinct(a, b):
+            fa, fb = _fp(a), _fp(b)
+            return not (fa and fb and hamming(fa, fb) <= NEAR_BITS)
+        good = watermarks.prefer_second(good, _distinct)
     mon.emit("image_ok", f"Image verified for: {trend['query']}", img=good[0])
     mon.emit("writing", f"Writing: {trend['query']} ({len(material['sources'])} sources)", trend=trend["query"])
     try:
@@ -252,6 +260,7 @@ def run(count=0, forever=False, interval=None, dry_run=False, store=None, settin
 
     mon.emit("run_start", f"Trends loop started: {len(settings['geos'])} countries, {len(pool.keys)} key(s)")
     push(state="running", currentTrend=None, pausedUntil=None, pauseReason=None)
+    mon.start_heartbeat()
     last_refresh = -1e9
     try:
         while True:
