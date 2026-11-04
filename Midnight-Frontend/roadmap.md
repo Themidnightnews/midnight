@@ -1,3 +1,11 @@
+# Homepage headline and placement (Nov 4)
+- [x] Enlarge the main image headline and prevent repeated stories across homepage news sections.
+- [x] Test selection rules and verify live layouts at 1280, 949 and 390: 180 unique article placements, larger headline, no overflow or page errors.
+
+# Remaining homepage category layouts (Nov 4)
+- [x] Apply the Technology/Business/Climate layout to Sport, Culture, Health & Science, Food, Travel, Style and Entertainment; keep Latest, World and Opinion unchanged.
+- [x] Verify live category rows and untitled lists on desktop, medium and phone screens (1280, 949, 390); no duplicates, extra headings, overflow or page errors.
+
 # Homepage category layouts (Nov 3)
 - [x] Give Technology a titled big-photo row followed by two untitled Technology card columns; add matching Business and Climate sections beneath it.
 - [x] Verify live category content and section order without changing Latest, World or Politics.

@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { BigCard, SectionHeader, ThumbRow } from "@/components/cards";
 import { EmptyCard } from "@/components/states";
 import { articlesInSection, latestArticles, topNews, type Article } from "@/data/news";
+import { createHomepageSelection } from "@/lib/homepage-selection";
 
 /* Home-page maximums per block; blocks show fewer when the database has fewer stories. */
-export const HOME_COUNTS = { ticker: 6, latest: 6, world: 5, politicsTop: 3, politics: 8, editors: 4, categoryTop: 3, categoryColumn: 6, tech: 15, business: 15, climate: 15, sport: 3, culture: 6, healthScience: 6, food: 6, travel: 6, style: 6, entertainment: 6, opinion: 4 } as const;
+export const HOME_COUNTS = { ticker: 6, latest: 6, world: 5, politicsTop: 3, politics: 8, editors: 4, categoryTop: 3, categoryColumn: 6, tech: 15, business: 15, climate: 15, sport: 15, culture: 15, healthScience: 15, food: 15, travel: 15, style: 15, entertainment: 15, opinion: 4 } as const;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,14 +29,15 @@ export const Route = createFileRoute("/")({
 function Index() {
   const C = HOME_COUNTS;
   const tickerStories = latestArticles(C.ticker);
-  const latest = latestArticles(C.latest);
-  const hero = new Set(topNews().map((a) => a.slug));
-  const editorsPicks = [...latestArticles()].filter((a) => !hero.has(a.slug)).sort((a, b) => b.headlineWeight - a.headlineWeight).slice(0, C.editors);
-  const pick = (slug: string, n: number) => articlesInSection(slug).slice(0, n);
+  const select = createHomepageSelection(topNews());
+  const editorsPicks = select([...latestArticles()].sort((a, b) => b.headlineWeight - a.headlineWeight), C.editors);
+  const latest = select(latestArticles(), C.latest);
+  const pick = (slug: string, n: number) => select(articlesInSection(slug), n);
   const world = pick("world", C.world), politicsNews = pick("politics", C.politics), technology = pick("tech", C.tech);
   const businessNews = pick("business", C.business), climateNews = pick("climate", C.climate), sportNews = pick("sport", C.sport);
-  const cultureNews = pick("culture", C.culture), healthScience = pick("health-and-science", C.healthScience), opinion = pick("opinion", C.opinion);
+  const cultureNews = pick("culture", C.culture), healthScience = pick("health-and-science", C.healthScience);
   const foodNews = pick("food", C.food), travelNews = pick("travel", C.travel), styleNews = pick("style", C.style), entertainmentNews = pick("entertainment", C.entertainment);
+  const opinion = pick("opinion", C.opinion);
   const show = (list: Article[]) => list.length > 0;
   return (
     <>
@@ -130,6 +132,13 @@ function Index() {
           { slug: "tech", title: "Technology", sub: "Chips, code and the companies behind them", stories: technology },
           { slug: "business", title: "Business", stories: businessNews },
           { slug: "climate", title: "Climate", stories: climateNews },
+          { slug: "sport", title: "Sport", sub: "Results, rivalries and the science of winning", stories: sportNews },
+          { slug: "culture", title: "Culture", stories: cultureNews },
+          { slug: "health-and-science", title: "Health & Science", stories: healthScience },
+          { slug: "food", title: "Food", stories: foodNews },
+          { slug: "travel", title: "Travel", stories: travelNews },
+          { slug: "style", title: "Style", stories: styleNews },
+          { slug: "entertainment", title: "Entertainment", stories: entertainmentNews },
         ].filter(({ stories }) => show(stories)).map(({ slug, title, sub, stories }) => {
           const remaining = stories.slice(C.categoryTop);
           const split = Math.min(C.categoryColumn, Math.ceil(remaining.length / 2));
@@ -160,83 +169,6 @@ function Index() {
             </section>
           );
         })}
-
-        {/* Sport */}
-        {show(sportNews) && (
-        <section>
-          <SectionHeader to="sport" title="Sport" sub="Results, rivalries and the science of winning" />
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {sportNews.map((s) => (
-              <BigCard key={s.slug} s={s} />
-            ))}
-          </div>
-        </section>)}
-
-        {/* Culture + Health & Science two-column */}
-        <section className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="culture" title="Culture" />
-            <div className="mt-5 space-y-3">
-              {cultureNews.length === 0 && <EmptyCard />}
-              {cultureNews.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="health-and-science" title="Health & Science" />
-            <div className="mt-5 space-y-3">
-              {healthScience.length === 0 && <EmptyCard />}
-              {healthScience.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Food + Travel two-column */}
-        <section className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="food" title="Food" />
-            <div className="mt-5 space-y-3">
-              {foodNews.length === 0 && <EmptyCard />}
-              {foodNews.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="travel" title="Travel" />
-            <div className="mt-5 space-y-3">
-              {travelNews.length === 0 && <EmptyCard />}
-              {travelNews.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Style + Entertainment two-column */}
-        <section className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="style" title="Style" />
-            <div className="mt-5 space-y-3">
-              {styleNews.length === 0 && <EmptyCard />}
-              {styleNews.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-          <div className="glass rounded-[2rem] p-4 sm:p-6">
-            <SectionHeader to="entertainment" title="Entertainment" />
-            <div className="mt-5 space-y-3">
-              {entertainmentNews.length === 0 && <EmptyCard />}
-              {entertainmentNews.map((s) => (
-                <ThumbRow key={s.slug} s={s} />
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* Opinion */}
         {show(opinion) && (

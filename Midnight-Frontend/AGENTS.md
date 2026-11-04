@@ -39,4 +39,4 @@
 - Articles and trends share a publication-date picker and UTC matcher but own independent selections; date filtering precedes sorting and resets pagination to keep results consistent with printed publication dates.
 - Admin article filtering and edit validation share admin-articles rules; operator-run status alignment preserves all other live validation rules.
 - Server-authenticated article bulk mutations clear editorial caches and audit slugs; article deletion retains reader history.
-- Homepage Tech, Business and Climate share a photo-row/list layout with category-specific slices to avoid duplicates.
+- Homepage sections claim slugs in display order, reserving the rotating hero pool; category photo/list slices stay disjoint.
